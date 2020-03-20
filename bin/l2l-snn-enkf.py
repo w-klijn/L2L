@@ -1,19 +1,14 @@
 import logging.config
 import os
 
-import numpy as np
 from l2l.utils.environment import Environment
 
-from l2l import dict_to_list
 from l2l.logging_tools import create_shared_logger_data, configure_loggers
 from l2l.optimizees.snn.optimizee import StructuralPlasticityOptimizee, \
     StructuralPlasticityOptimizeeParameters
-from l2l.optimizees.snn import optimizee
 from l2l.optimizers.kalmanfilter import EnsembleKalmanFilter,\
     EnsembleKalmanFilterParameters
 from l2l.paths import Paths
-
-# from l2l.utils import JUBE_runner as jube
 import l2l.utils.JUBE_runner as jube
 
 logger = logging.getLogger('bin.l2l-mnist-enkf')
@@ -101,7 +96,8 @@ def run_experiment():
                                   os.path.join(paths.root_dir_path,
                                                "ready_files/ready_w_"))
     # Path where the job will be executed
-    traj.f_add_parameter_to_group("JUBE_params", "work_path", root_dir_path)
+    traj.f_add_parameter_to_group("JUBE_params", "work_path",
+                                  paths.root_dir_path)
     traj.f_add_parameter_to_group("JUBE_params", "paths_obj", paths)
 
     # Optimizee params
@@ -110,7 +106,7 @@ def run_experiment():
         seed=optimizee_seed)
     # Inner-loop simulator
     optimizee = StructuralPlasticityOptimizee(traj, optimizee_parameters)
-    jube.prepare_optimizee(optimizee, root_dir_path)
+    jube.prepare_optimizee(optimizee, paths.root_dir_path)
 
     logger.info("Optimizee parameters: %s", optimizee_parameters)
 

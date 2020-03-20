@@ -119,6 +119,7 @@ class EnsembleKalmanFilter(Optimizer):
         for e in self.eval_pop:
             e["targets"] = self.target_label
             e["train_px_one"] = self.train_px_one
+        self.g = 0
 
         self._expand_trajectory(traj)
 

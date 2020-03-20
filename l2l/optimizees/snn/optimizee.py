@@ -550,16 +550,16 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.Simulate(t_sim)
         # set lower simulation time
         self.t_sim = 10000
+        n_ensembles = traj.individual.n_ensembles
         # Start training
         for i in range(10):
             print('Iteration {}'.format(i))
             save_connections(self, i)
-            self._run_simulation(i, traj.train_px_one, record_mean=True)
+            self._run_simulation(i, traj.individual.train_px_one, record_mean=True)
             model_out = softmax(
                 [self.mean_ca_e_out[j][-1] for j in range(10)])
             np.save('model_out.npy', model_out)
-            target = int(self.target_label[0])
-            n_ensembles = 1
+            target = int(traj.individual.targets[0])
             # weights = enkf_run.run()
             # print(weights)
             # weights *= enkf_run.scaler
@@ -567,13 +567,15 @@ class StructuralPlasticityOptimizee(Optimizee):
             # print(weights)
             # replace_weights(example, weights)
             self.plot_all(i)
-
         return dict(targets=np.array(target)[np.newaxis],
                     model_out=np.reshape(model_out,
                                          (n_ensembles, 10, 1)),
                     n_ensembles=n_ensembles, iter_rng=3,
-                    connections='connections_{}.pkl'.format(i),
-                    iteration_idx=i)
+                    # TODO set specific individual number
+                    connections='connections_g{}_in{}.pkl'.format(
+                        traj.individual.generation,
+                        traj.individual.ind_no)
+                    )
 
     def _run_simulation(self, j, train_px_one, record_mean=False):
         """
