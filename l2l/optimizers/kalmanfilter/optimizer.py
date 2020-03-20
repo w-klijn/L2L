@@ -17,7 +17,7 @@ logger = logging.getLogger("optimizers.kalmanfilter")
 
 EnsembleKalmanFilterParameters = namedtuple(
     'EnsembleKalmanFilter', ['gamma', 'maxit', 'n_iteration', 'n_ensembles',
-                             'pop_size', 'n_batches', 'online', 'seed',
+                             'pop_size', 'n_batches', 'online', 'seed', 'path',
                              ]
 )
 
@@ -35,8 +35,7 @@ EnsembleKalmanFilterParameters.__doc__ = """
         value 
 :param seed: The random seed used to sample and fit the distribution. 
              Uses a random generator seeded with this seed.
-:param observations: nd numpy array, observation or targets, should be an
-                     array of integers
+:param path: String, Root path for the file saving and loading the connections 
 """
 
 
@@ -76,6 +75,8 @@ class EnsembleKalmanFilter(Optimizer):
                              comment='Seed used for random number generation '
                                      'in optimizer')
         traj.f_add_parameter('pop_size', parameters.pop_size)
+        traj.f_add_parameter('path', parameters.path,
+                             comment='Root folder for the simulation')
 
         _, self.optimizee_individual_dict_spec = dict_to_list(
             self.optimizee_create_individual(), get_dict_spec=True)
@@ -122,9 +123,9 @@ class EnsembleKalmanFilter(Optimizer):
         self.get_external_input()
         # TODO remove next lines if unused
         # remove previous files
-        files = ['eps', 'bin', 'csv', 'pkl']
-        print('Removing files {}'.format(files))
-        self._remove_files(files)
+        # files = ['eps', 'bin', 'csv', 'pkl']
+        # print('Removing files {}'.format(files))
+        # self._remove_files(files)
 
         for e in self.eval_pop:
             e["targets"] = self.target_label

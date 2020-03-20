@@ -35,7 +35,7 @@ from l2l.optimizees.optimizee import Optimizee
 from collections import OrderedDict, namedtuple
 
 StructuralPlasticityOptimizeeParameters = namedtuple(
-    'StructuralPlasticityOptimizeeParameters', ['seed'])
+    'StructuralPlasticityOptimizeeParameters', ['seed', 'path'])
 
 
 class StructuralPlasticityOptimizee(Optimizee):
@@ -127,10 +127,9 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.growth_curve_out_i_i = growth_curves.out_i_i
         self.pixel_rate_generators = None
 
-        # MNIST DATA HANDLING
-        self.target_label = ['1']
-        self.other_label = ['0', '2', '3', '4', '5', '6', '7', '8', '9']
+        self.path = parameters.path
 
+        # TODO Remove following?
         self.target_px = None
         self.target_lbl = None
         self.other_px = None
@@ -434,14 +433,15 @@ class StructuralPlasticityOptimizee(Optimizee):
             sum(neuron['Out_I_Axn_0']['z_connected']
                 for neuron in syn_elems_i))
 
-    def set_external_input(self, iteration, train_px_one):
+    def set_external_input(self, iteration, train_px_one, path='.'):
         random_id = np.random.randint(low=0, high=len(train_px_one))
         image = train_px_one[random_id]
         # Save image for reference
         plottable_image = np.reshape(image, (28, 28))
         plt.imshow(plottable_image, cmap='gray_r')
         plt.title('Index: {}'.format(random_id))
-        plt.savefig('normal_input{}.eps'.format(iteration), format='eps')
+        save_path = os.path.join(path, 'normal_input{}.eps'.format(iteration))
+        plt.savefig(save_path, format='eps')
         plt.close()
         if self.input_type == 'greyvalue':
             rates = spike_generator.greyvalue(image,
@@ -537,7 +537,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         t_sim = 40000
         nest.Simulate(t_sim)
         conns = nest.GetConnections(source=self.net_structure)
-        save_connections(self, 0)
+        save_connections(self, 0, path=self.path)
         return dict(connections=conns)
 
     def simulate(self, traj):
@@ -553,7 +553,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         gen_idx = traj.individual.generation
         print('Iteration {}'.format(gen_idx))
         # load connections and set
-        replace_weights(gen_idx)
+        replace_weights(gen_idx, self.path)
         self._run_simulation(gen_idx,
                              traj.individual.train_px_one[gen_idx],
                              record_mean=True)
@@ -569,11 +569,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.plot_all(gen_idx)
         # return connection weights
         conns = nest.GetConnections(source=self.net_structure)
-        return dict(model_out=np.reshape(model_out,
-                                         (1, 10, 1)),
-                    # TODO set specific individual number
-                    connections=conns
-                    )
+        return dict(model_out=model_out, connections=conns)
 
     def _run_simulation(self, j, train_px_one, record_mean=False):
         """
@@ -590,8 +586,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         print("One was shown")
 
 
-def save_connections(net, ind_id):
-    print(net.net_structure)
+def save_connections(net, gen_idx, path='.'):
     conn = nest.GetConnections(source=net.net_structure)
     status = nest.GetStatus(conn)
     d = OrderedDict({'source': [], 'target': [], 'weight': []})
@@ -600,14 +595,16 @@ def save_connections(net, ind_id):
         d['target'].append(elem.get('target'))
         d['weight'].append(elem.get('weight'))
     df = pd.DataFrame(d)
-    df.to_pickle('./connections_{}.pkl'.format(ind_id))
-    df.to_csv('./connections_{}.csv'.format(ind_id))
+    df.to_pickle(os.path.join(path, 'connections_{}.pkl'.format(gen_idx)))
+    df.to_csv(os.path.join(path, 'connections_{}.csv'.format(gen_idx)))
 
 
-def replace_weights(weight):
-    conns = pd.read_csv('connections.csv')
+def replace_weights(gen_idx, path='.'):
+    conns = pd.read_csv(
+        os.path.join(path, 'connections_{}.csv'.format(gen_idx)))
     sources = conns['source'].values
     targets = conns['target'].values
+    weight = conns['weight'].values
     syn_dict = {'weight': weight}
     conn_dict = {'rule': 'one_to_one'}
     nest.Connect(sources, targets, syn_spec=syn_dict, conn_spec=conn_dict)

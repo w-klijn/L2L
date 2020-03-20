@@ -103,7 +103,7 @@ def run_experiment():
     # Optimizee params
     optimizee_seed = 123
     optimizee_parameters = StructuralPlasticityOptimizeeParameters(
-        seed=optimizee_seed)
+        seed=optimizee_seed, path=paths.root_dir_path)
     # Inner-loop simulator
     optimizee = StructuralPlasticityOptimizee(traj, optimizee_parameters)
     jube.prepare_optimizee(optimizee, paths.root_dir_path)
@@ -119,7 +119,8 @@ def run_experiment():
                                                           pop_size=1,
                                                           n_batches=1,
                                                           online=False,
-                                                          seed=1234)
+                                                          seed=1234,
+                                                          path=paths.root_dir_path)
     logger.info("Optimizer parameters: %s", optimizer_parameters)
 
     optimizer = EnsembleKalmanFilter(traj,
