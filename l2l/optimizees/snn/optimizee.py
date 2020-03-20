@@ -521,10 +521,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         """
         set up the network and return the weights
         """
-        # remove previous files
-        files = ['eps', 'bin', 'csv', 'pkl']
-        print('Removing files {}'.format(files))
-        _remove_files(files)
         # Prepare simulation
         self.prepare_simulation()
         self.create_nodes()
@@ -534,9 +530,15 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.connect_internal_bulk()
         self.connect_external_input(self.number_input_neurons)
         self.connect_bulk_to_out()
-        # example.connect_internal_out()
+        # self.connect_internal_out()
         self.create_input_spike_detectors()
-        return dict(connections=nest.GetConnections(source=self.net_structure))
+        # TODO may be removed
+        # warm up phase
+        t_sim = 40000
+        nest.Simulate(t_sim)
+        conns = nest.GetConnections(source=self.net_structure)
+        save_connections(self, 0)
+        return dict(connections=conns)
 
     def simulate(self, traj):
         """
@@ -545,36 +547,32 @@ class StructuralPlasticityOptimizee(Optimizee):
         :return: a single element :obj:`tuple` containing the value of the
             chosen function
         """
-        # warm up phase
-        t_sim = 40000
-        nest.Simulate(t_sim)
         # set lower simulation time
         self.t_sim = 10000
-        n_ensembles = traj.individual.n_ensembles
-        # Start training
-        for i in range(10):
-            print('Iteration {}'.format(i))
-            save_connections(self, i)
-            self._run_simulation(i, traj.individual.train_px_one, record_mean=True)
-            model_out = softmax(
-                [self.mean_ca_e_out[j][-1] for j in range(10)])
-            np.save('model_out.npy', model_out)
-            target = int(traj.individual.targets[0])
-            # weights = enkf_run.run()
-            # print(weights)
-            # weights *= enkf_run.scaler
-            # print('Scaler: ', enkf_run.scaler)
-            # print(weights)
-            # replace_weights(example, weights)
-            self.plot_all(i)
-        return dict(targets=np.array(target)[np.newaxis],
-                    model_out=np.reshape(model_out,
-                                         (n_ensembles, 10, 1)),
-                    n_ensembles=n_ensembles, iter_rng=3,
+        # Start training/simulation
+        gen_idx = traj.individual.generation
+        print('Iteration {}'.format(gen_idx))
+        # load connections and set
+        replace_weights(gen_idx)
+        self._run_simulation(gen_idx,
+                             traj.individual.train_px_one[gen_idx],
+                             record_mean=True)
+        model_out = softmax(
+            [self.mean_ca_e_out[j][-1] for j in range(10)])
+        # np.save('model_out.npy', model_out)
+        # weights = enkf_run.run()
+        # print(weights)
+        # weights *= enkf_run.scaler
+        # print('Scaler: ', enkf_run.scaler)
+        # print(weights)
+        # replace_weights(example, weights)
+        self.plot_all(gen_idx)
+        # return connection weights
+        conns = nest.GetConnections(source=self.net_structure)
+        return dict(model_out=np.reshape(model_out,
+                                         (1, 10, 1)),
                     # TODO set specific individual number
-                    connections='connections_g{}_in{}.pkl'.format(
-                        traj.individual.generation,
-                        traj.individual.ind_no)
+                    connections=conns
                     )
 
     def _run_simulation(self, j, train_px_one, record_mean=False):
@@ -592,7 +590,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         print("One was shown")
 
 
-def save_connections(net, j):
+def save_connections(net, ind_id):
+    print(net.net_structure)
     conn = nest.GetConnections(source=net.net_structure)
     status = nest.GetStatus(conn)
     d = OrderedDict({'source': [], 'target': [], 'weight': []})
@@ -601,32 +600,18 @@ def save_connections(net, j):
         d['target'].append(elem.get('target'))
         d['weight'].append(elem.get('weight'))
     df = pd.DataFrame(d)
-    df.to_pickle('./connections_{}.pkl'.format(j))
-    df.to_csv('./connections_{}.csv'.format(j))
+    df.to_pickle('./connections_{}.pkl'.format(ind_id))
+    df.to_csv('./connections_{}.csv'.format(ind_id))
 
 
-def replace_weights(net, weight):
-    # conns = pd.read_csv('connections.csv')
-    # sources = conns['source'].values
-    # targets = conns['target'].values
-    conns = nest.GetConnections(source=net.net_structure)
-    for idx, j in enumerate(conns):
-        nest.SetStatus(tuple([j]), {'weight': weight[idx]})
+def replace_weights(weight):
+    conns = pd.read_csv('connections.csv')
+    sources = conns['source'].values
+    targets = conns['target'].values
+    syn_dict = {'weight': weight}
+    conn_dict = {'rule': 'one_to_one'}
+    nest.Connect(sources, targets, syn_spec=syn_dict, conn_spec=conn_dict)
+    # conns = nest.GetConnections(source=net.net_structure)
+    # for idx, j in enumerate(conns):
+    #     nest.SetStatus(tuple([j]), {'weight': weight[idx]})
 
-
-def _remove_files(suffixes):
-    for suffix in suffixes:
-        files = glob.glob('*.{}'.format(suffix))
-        try:
-            [os.remove(fl) for fl in files]
-        except OSError as ose:
-            print('Error {} {}'.format(files, ose))
-
-
-if __name__ == '__main__':
-    np.random.seed(0)
-    # remove previous files
-    f = ['eps', 'bin', 'csv', 'pkl']
-    _remove_files(f)
-    example = StructuralPlasticityOptimizee()
-    example.create_individual()

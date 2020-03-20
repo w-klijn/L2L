@@ -1,4 +1,7 @@
+import glob
 import logging
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,7 +16,7 @@ import l2l.optimizers.kalmanfilter.data as data
 logger = logging.getLogger("optimizers.kalmanfilter")
 
 EnsembleKalmanFilterParameters = namedtuple(
-    'EnsembleKalmanFilter', ['gamma', 'maxit', 'n_iteration',
+    'EnsembleKalmanFilter', ['gamma', 'maxit', 'n_iteration', 'n_ensembles',
                              'pop_size', 'n_batches', 'online', 'seed',
                              ]
 )
@@ -21,6 +24,7 @@ EnsembleKalmanFilterParameters = namedtuple(
 EnsembleKalmanFilterParameters.__doc__ = """
 :param gamma: float, A small value, multiplied with the eye matrix  
 :param maxit: int, Epochs to run inside the Kalman Filter
+:param n_ensembles: int, Number of ensembles
 :param n_iteration: int, Number of iterations to perform
 :param pop_size: int, Minimal number of individuals per simulation.
 :param n_batches: int, Number of mini-batches to use in the Kalman Filter
@@ -60,6 +64,8 @@ class EnsembleKalmanFilter(Optimizer):
         traj.f_add_parameter('gamma', parameters.gamma, comment='Noise level')
         traj.f_add_parameter('maxit', parameters.maxit,
                              comment='Maximum iterations')
+        traj.f_add_parameter('n_ensembles', parameters.n_ensembles,
+                             comment='Number of ensembles')
         traj.f_add_parameter('n_iteration', parameters.n_iteration,
                              comment='Number of iterations to run')
         traj.f_add_parameter('n_batches', parameters.n_batches)
@@ -70,7 +76,6 @@ class EnsembleKalmanFilter(Optimizer):
                              comment='Seed used for random number generation '
                                      'in optimizer')
         traj.f_add_parameter('pop_size', parameters.pop_size)
-        # traj.f_add_parameter('observations', parameters.observations)
 
         _, self.optimizee_individual_dict_spec = dict_to_list(
             self.optimizee_create_individual(), get_dict_spec=True)
@@ -115,6 +120,11 @@ class EnsembleKalmanFilter(Optimizer):
         # get the targets
         self.get_mnist_data()
         self.get_external_input()
+        # TODO remove next lines if unused
+        # remove previous files
+        files = ['eps', 'bin', 'csv', 'pkl']
+        print('Removing files {}'.format(files))
+        self._remove_files(files)
 
         for e in self.eval_pop:
             e["targets"] = self.target_label
@@ -200,6 +210,7 @@ class EnsembleKalmanFilter(Optimizer):
                                   )
                              for i in range(traj.pop_size)]
         traj.generation += 1
+        self.g += 1
         self._expand_trajectory(traj)
 
     @staticmethod
@@ -228,6 +239,15 @@ class EnsembleKalmanFilter(Optimizer):
                                                  ensemble_size)
             for _ in range(traj.pop_size)]
         return params, best_fitness, best_individual
+
+    @staticmethod
+    def _remove_files(suffixes):
+        for suffix in suffixes:
+            files = glob.glob('*.{}'.format(suffix))
+            try:
+                [os.remove(fl) for fl in files]
+            except OSError as ose:
+                print('Error {} {}'.format(files, ose))
 
     def end(self, traj):
         """

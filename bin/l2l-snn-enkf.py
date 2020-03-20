@@ -114,6 +114,7 @@ def run_experiment():
     optimizer_seed = 1234
     optimizer_parameters = EnsembleKalmanFilterParameters(gamma=0,
                                                           maxit=1,
+                                                          n_ensembles=1,
                                                           n_iteration=1,
                                                           pop_size=1,
                                                           n_batches=1,
