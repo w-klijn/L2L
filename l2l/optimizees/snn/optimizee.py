@@ -147,12 +147,6 @@ class StructuralPlasticityOptimizee(Optimizee):
             self.input_type)
         self.noise = nest.Create('poisson_generator')
         nest.PrintNetwork(depth=2)
-        # create_individual can be called because __init__ is complete except
-        # for traj initializtion
-        indiv_dict = self.create_individual()
-        for key, val in indiv_dict.items():
-            traj.individual.f_add_parameter(key, val)
-        traj.individual.f_add_parameter('seed', seed)
 
     def reset_kernel(self):
         nest.ResetKernel()
@@ -238,8 +232,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.input_spike_detector = nest.Create("spike_detector",
                                                 params={"withgid": True,
                                                         "withtime": True})
-        nest.Connect(self.nodes_in, self.input_spike_detector)
-        # nest.Connect(self.pixel_rate_generators, self.input_spike_detector)
 
     def create_pixel_rate_generator(self, input_type):
         if input_type == 'greyvalue':
@@ -257,6 +249,9 @@ class StructuralPlasticityOptimizee(Optimizee):
             # FIXME changed to len(rates) from len(offsets)
             self.pixel_rate_generators = nest.Create(
                 "poisson_generator", len(rates))
+
+    def connect_input_spike_detectors(self):
+        nest.Connect(self.nodes_in, self.input_spike_detector)
 
     def connect_greyvalue_input(self):
         # Poisson to input neurons
@@ -549,17 +544,13 @@ class StructuralPlasticityOptimizee(Optimizee):
         """
         # Do the connections
         # nest.EnableStructuralPlasticity()
-        self.create_input_spike_detectors()
         self.connect_internal_bulk()
         self.connect_external_input(self.number_input_neurons)
         self.connect_bulk_to_out()
+        self.connect_input_spike_detectors()
         # self.connect_internal_out()
-        # TODO may be removed
-        # warm up phase
-        t_sim = 1000
-        nest.Simulate(t_sim)
         conns = nest.GetConnections(source=self.net_structure)
-        save_connections(self, 0, path=self.path)
+        save_connections(conns, 0, path=self.path)
         return dict(connections=conns)
 
     def simulate(self, traj):
@@ -569,9 +560,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         :return: a single element :obj:`tuple` containing the value of the
             chosen function
         """
-        self.create_nodes()
-        self.create_synapses()
-        self.create_input_spike_detectors()
         # set lower simulation time
         # self.t_sim = 10000.
         # Start training/simulation
@@ -611,8 +599,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         print("One was shown")
 
 
-def save_connections(net, gen_idx, path='.'):
-    conn = nest.GetConnections(source=net.net_structure)
+def save_connections(conn, gen_idx, path='.'):
     status = nest.GetStatus(conn)
     d = OrderedDict({'source': [], 'target': [], 'weight': []})
     for elem in status:
@@ -634,11 +621,11 @@ def replace_weights(gen_idx, net_structure, path='.'):
     print(net_structure)
     print('now replacing connection weights')
     for (s, t, w) in zip(sources, targets, weights):
-        if s or t not in net_structure:
-            continue
+        # if s or t not in net_structure:
+        #     continue
         syn_spec = {'weight': w}
         print(s, t, w)
-        nest.Connect(s, t, syn_spec=syn_spec,
+        nest.Connect(tuple([s]), tuple([t]), syn_spec=syn_spec,
                      conn_spec='one_to_one')
     # conns = nest.GetConnections(source=net_structure)
     # for idx, j in enumerate(conns):
