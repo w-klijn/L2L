@@ -47,7 +47,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         # SIMULATION PARAMETERS
         self.input_type = 'greyvalue'
         # simulated time (ms)
-        self.t_sim = 40000.  # 60000.0
+        self.t_sim = 1000.  # 60000.0
         # simulation step (ms).
         self.dt = 0.1
 
@@ -83,6 +83,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.nodes_bulk_i = None
         self.nodes_out_e = None
         self.nodes_out_i = None
+        self.input_spike_detector = None
 
         self.mean_ca_e = []
         self.mean_ca_i = []
@@ -94,6 +95,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.total_connections_e_out_0 = []
         self.total_connections_i_out_0 = []
 
+        self.rates = []
         self.net_structure = ()
 
         self.psc_in = 585.0
@@ -102,6 +104,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.psc_c = 585.0
         self.psc_out = 100.0
         self.psc_ext = 6.2
+
 
         # synaptic dictionary with uniform weight distribution
         self.syn_dict_e = {"model": "random_synapse",
@@ -125,7 +128,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.growth_curve_out_e_i = growth_curves.out_e_i
         self.growth_curve_out_i_e = growth_curves.out_i_e
         self.growth_curve_out_i_i = growth_curves.out_i_i
-        self.pixel_rate_generators = None
 
         self.path = parameters.path
 
@@ -137,7 +139,22 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.test_px = None
         self.test_lbl = None
 
-    def prepare_simulation(self):
+        self.reset_kernel()
+        self.create_nodes()
+        self.create_synapses()
+        self.create_input_spike_detectors()
+        self.pixel_rate_generators = self.create_pixel_rate_generator(
+            self.input_type)
+        self.noise = nest.Create('poisson_generator')
+        nest.PrintNetwork(depth=2)
+        # create_individual can be called because __init__ is complete except
+        # for traj initializtion
+        indiv_dict = self.create_individual()
+        for key, val in indiv_dict.items():
+            traj.individual.f_add_parameter(key, val)
+        traj.individual.f_add_parameter('seed', seed)
+
+    def reset_kernel(self):
         nest.ResetKernel()
         nest.set_verbosity('M_ERROR')
         nest.SetKernelStatus({'resolution': self.dt,
@@ -224,9 +241,24 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.Connect(self.nodes_in, self.input_spike_detector)
         # nest.Connect(self.pixel_rate_generators, self.input_spike_detector)
 
-    def connect_greyvalue_input(self, n_img):
-        self.pixel_rate_generators = nest.Create("poisson_generator",
-                                                 n_img)
+    def create_pixel_rate_generator(self, input_type):
+        if input_type == 'greyvalue':
+            return nest.Create("poisson_generator",
+                               self.number_input_neurons)
+        elif input_type == 'bellec':
+            return nest.Create("spike_generator",
+                               self.number_input_neurons)
+        elif input_type == 'greyvalue_sequential':
+            n_img = self.number_input_neurons
+            rates, starts, ends = spike_generator.greyvalue_sequential(
+                self.target_px[n_img], start_time=0, end_time=783, min_rate=0,
+                max_rate=10)
+            self.rates = rates
+            # FIXME changed to len(rates) from len(offsets)
+            self.pixel_rate_generators = nest.Create(
+                "poisson_generator", len(rates))
+
+    def connect_greyvalue_input(self):
         # Poisson to input neurons
         # syn_dict = {"model": "random_synapse"}
         nest.Connect(self.pixel_rate_generators, self.nodes_in, "one_to_one",
@@ -236,13 +268,7 @@ class StructuralPlasticityOptimizee(Optimizee):
                      "one_to_one", syn_spec=self.syn_dict_e)
         nest.Connect(self.nodes_in, self.nodes_i, syn_spec=self.syn_dict_i)
 
-    def connect_greyvalue_sequential_input(self, n_img):
-        rates, starts, ends = spike_generator.greyvalue_sequential(
-            self.target_px[n_img], start_time=0, end_time=783, min_rate=0,
-            max_rate=10)
-        # FIXME changed to len(rates) from len(offsets)
-        self.pixel_rate_generators = nest.Create(
-            "poisson_generator", len(rates))
+    def connect_greyvalue_sequential_input(self):
         # FIXME changed commented out
         # nest.SetStatus(pixel_rate_generators, generator_stats)
         # Poisson to input neurons
@@ -253,8 +279,6 @@ class StructuralPlasticityOptimizee(Optimizee):
                      "one_to_one", syn_spec=self.syn_dict_e)
 
     def connect_bellec_input(self):
-        self.pixel_rate_generators = nest.Create("spike_generator",
-                                                 self.number_input_neurons)
         nest.Connect(self.pixel_rate_generators, self.nodes_in, "one_to_one")
         weights = {'distribution': 'uniform',
                    'low': self.psc_i, 'high': self.psc_e, }
@@ -360,19 +384,18 @@ class StructuralPlasticityOptimizee(Optimizee):
             # TODO add connect i to e ?
 
     def connect_external_input(self, n_img):
-        noise = nest.Create('poisson_generator')
-        nest.SetStatus(noise, {"rate": self.bg_rate})
-        nest.Connect(noise, self.nodes_e, 'all_to_all',
+        nest.SetStatus(self.noise, {"rate": self.bg_rate})
+        nest.Connect(self.noise, self.nodes_e, 'all_to_all',
                      {'weight': self.psc_ext, 'delay': 1.0})
-        nest.Connect(noise, self.nodes_i, 'all_to_all',
+        nest.Connect(self.noise, self.nodes_i, 'all_to_all',
                      {'weight': self.psc_ext, 'delay': 1.0})
 
         if self.input_type == 'bellec':
             self.connect_bellec_input()
         elif self.input_type == 'greyvalue':
-            self.connect_greyvalue_input(n_img)
+            self.connect_greyvalue_input()
         elif self.input_type == 'greyvalue_sequential':
-            self.connect_greyvalue_sequential_input(n_img)
+            self.connect_greyvalue_sequential_input()
 
     def connect_internal_out(self):
         # Connect out
@@ -414,7 +437,10 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.total_connections_i.clear()
         self.total_connections_e_out_0.clear()
         self.total_connections_i_out_0.clear()
-        nest.SetStatus(self.input_spike_detector, {"n_events": 0})
+        try:
+            nest.SetStatus(self.input_spike_detector, {"n_events": 0})
+        except AttributeError:
+            pass
 
     def record_connectivity(self):
         syn_elems_e = nest.GetStatus(self.nodes_e, 'synaptic_elements')
@@ -521,20 +547,16 @@ class StructuralPlasticityOptimizee(Optimizee):
         """
         set up the network and return the weights
         """
-        # Prepare simulation
-        self.prepare_simulation()
-        self.create_nodes()
-        self.create_synapses()
-        nest.PrintNetwork(depth=2)
+        # Do the connections
         # nest.EnableStructuralPlasticity()
+        self.create_input_spike_detectors()
         self.connect_internal_bulk()
         self.connect_external_input(self.number_input_neurons)
         self.connect_bulk_to_out()
         # self.connect_internal_out()
-        self.create_input_spike_detectors()
         # TODO may be removed
         # warm up phase
-        t_sim = 40000
+        t_sim = 1000
         nest.Simulate(t_sim)
         conns = nest.GetConnections(source=self.net_structure)
         save_connections(self, 0, path=self.path)
@@ -547,15 +569,19 @@ class StructuralPlasticityOptimizee(Optimizee):
         :return: a single element :obj:`tuple` containing the value of the
             chosen function
         """
+        self.create_nodes()
+        self.create_synapses()
+        self.create_input_spike_detectors()
         # set lower simulation time
-        self.t_sim = 10000
+        # self.t_sim = 10000.
         # Start training/simulation
         gen_idx = traj.individual.generation
         print('Iteration {}'.format(gen_idx))
+        # self.prepare_connect_simulation()
         # load connections and set
-        replace_weights(gen_idx, self.path)
+        replace_weights(gen_idx, self.net_structure, self.path)
         self._run_simulation(gen_idx,
-                             traj.individual.train_px_one[gen_idx],
+                             traj.individual.train_px_one,
                              record_mean=True)
         model_out = softmax(
             [self.mean_ca_e_out[j][-1] for j in range(10)])
@@ -565,7 +591,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         # weights *= enkf_run.scaler
         # print('Scaler: ', enkf_run.scaler)
         # print(weights)
-        # replace_weights(example, weights)
         self.plot_all(gen_idx)
         # return connection weights
         conns = nest.GetConnections(source=self.net_structure)
@@ -599,16 +624,23 @@ def save_connections(net, gen_idx, path='.'):
     df.to_csv(os.path.join(path, 'connections_{}.csv'.format(gen_idx)))
 
 
-def replace_weights(gen_idx, path='.'):
+def replace_weights(gen_idx, net_structure, path='.'):
     conns = pd.read_csv(
         os.path.join(path, 'connections_{}.csv'.format(gen_idx)))
     sources = conns['source'].values
     targets = conns['target'].values
-    weight = conns['weight'].values
-    syn_dict = {'weight': weight}
-    conn_dict = {'rule': 'one_to_one'}
-    nest.Connect(sources, targets, syn_spec=syn_dict, conn_spec=conn_dict)
-    # conns = nest.GetConnections(source=net.net_structure)
+    weights = conns['weight'].values
+    print('net_structure')
+    print(net_structure)
+    print('now replacing connection weights')
+    for (s, t, w) in zip(sources, targets, weights):
+        if s or t not in net_structure:
+            continue
+        syn_spec = {'weight': w}
+        print(s, t, w)
+        nest.Connect(s, t, syn_spec=syn_spec,
+                     conn_spec='one_to_one')
+    # conns = nest.GetConnections(source=net_structure)
     # for idx, j in enumerate(conns):
-    #     nest.SetStatus(tuple([j]), {'weight': weight[idx]})
+    #     nest.SetStatus(tuple([j]), {'weight': weights[idx]})
 
