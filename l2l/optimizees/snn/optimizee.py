@@ -138,7 +138,9 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.other_lbl = None
         self.test_px = None
         self.test_lbl = None
+        self.prepare_network()
 
+    def prepare_network(self):
         self.reset_kernel()
         self.create_nodes()
         self.create_synapses()
@@ -567,6 +569,10 @@ class StructuralPlasticityOptimizee(Optimizee):
         print('Iteration {}'.format(gen_idx))
         # self.prepare_connect_simulation()
         # load connections and set
+        nest.PrintNetwork(depth=2)
+        self.prepare_network()
+        #print("Done\n")
+        #nest.PrintNetwork(depth=2)
         replace_weights(gen_idx, self.net_structure, self.path)
         self._run_simulation(gen_idx,
                              traj.individual.train_px_one,
@@ -617,14 +623,14 @@ def replace_weights(gen_idx, net_structure, path='.'):
     sources = conns['source'].values
     targets = conns['target'].values
     weights = conns['weight'].values
-    print('net_structure')
-    print(net_structure)
+    #print('net_structure')
+    #print(net_structure)
     print('now replacing connection weights')
     for (s, t, w) in zip(sources, targets, weights):
         # if s or t not in net_structure:
         #     continue
         syn_spec = {'weight': w}
-        print(s, t, w)
+        #print(s, t, w)
         nest.Connect(tuple([s]), tuple([t]), syn_spec=syn_spec,
                      conn_spec='one_to_one')
     # conns = nest.GetConnections(source=net_structure)
