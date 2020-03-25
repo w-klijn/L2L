@@ -164,29 +164,46 @@ class EnsembleKalmanFilter(Optimizer):
         self.eval_pop.clear()
 
         individuals = traj.individuals[traj.generation]
-        gamma = traj.gamma
+        gamma = np.eye(10) * traj.gamma
         ens_res = []
         ens_fitnesses = []
 
-        # go over all individuals
-        for i in individuals:
-            # optimization
-            ens = np.array(i.ens)
-            ensemble_size = ens.shape[0]
-            # get the score/fitness of the individual
-            fitness_per_individual = traj.current_results[i.ind_idx][1][
-                'loss']
-            ens_fitnesses.append(fitness_per_individual)
-            model_output = traj.current_results[i.ind_idx][1]['out']
-            enkf = EnKF(maxit=traj.maxit,
-                        online=traj.online,
-                        n_batches=traj.n_batches)
-            enkf.fit(ensemble=ens,
-                     ensemble_size=ensemble_size,
-                     observations=self.targets,
-                     model_output=model_output,
-                     gamma=gamma)
-            ens_res.append(enkf.ensemble)
+        ensemble_size = traj.pop_size
+        ens, scaler = self._shape_weights(traj, ensemble_size, normalize=True,
+                                          method='max')
+        model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
+                               range(ensemble_size)])
+        model_outs = model_outs.reshape(ensemble_size, 10, 1)
+        observations = int(self.target_label[0])
+        # TODO normalize connection weights/ ens
+
+        enkf = EnKF(maxit=traj.maxit,
+                    online=traj.online,
+                    n_batches=traj.n_batches)
+        enkf.fit(ensemble=ens,
+                 ensemble_size=ensemble_size,
+                 observations=np.array(observations)[np.newaxis],
+                 model_output=model_outs,
+                 gamma=gamma)
+
+        # # go over all individuals
+        # for i in individuals:
+        #     # optimization
+        #     ens = fitnesses_results
+        #     # get the score/fitness of the individual
+        #     fitness_per_individual = traj.current_results[i.ind_idx][1][
+        #         'loss']
+        #     ens_fitnesses.append(fitness_per_individual)
+        #     model_output = traj.current_results[i.ind_idx][1]['out']
+        #     enkf = EnKF(maxit=traj.maxit,
+        #                 online=traj.online,
+        #                 n_batches=traj.n_batches)
+        #     enkf.fit(ensemble=ens,
+        #              ensemble_size=ensemble_size,
+        #              observations=self.targets,
+        #              model_output=model_output,
+        #              gamma=gamma)
+        #     ens_res.append(enkf.ensemble)
 
         generation_name = 'generation_{}'.format(traj.generation)
         traj.results.generation_params.f_add_result_group(generation_name)
@@ -213,6 +230,20 @@ class EnsembleKalmanFilter(Optimizer):
         traj.generation += 1
         self.g += 1
         self._expand_trajectory(traj)
+
+    @staticmethod
+    def _shape_weights(traj, ensemble_size, normalize=False, method='max'):
+        outs = [traj.current_results[i][1]['connection_weights'] for i in
+                range(ensemble_size)]
+        scaler = 0.
+        if normalize:
+            if method == 'max':
+                scaler = np.max(outs)
+                outs /= scaler
+            else:
+                raise KeyError(
+                    'Normalizing method {} not known'.format(method))
+        return outs, scaler
 
     @staticmethod
     def _create_individual_distribution(random_state, weights,

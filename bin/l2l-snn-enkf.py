@@ -88,7 +88,7 @@ def run_experiment():
     # MPI Processes per job
     traj.f_add_parameter_to_group("JUBE_params", "tasks_per_job", "1")
     # The execution command
-    traj.f_add_parameter_to_group("JUBE_params", "exec", "python " +
+    traj.f_add_parameter_to_group("JUBE_params", "exec", "mpirun python " +
                                   os.path.join(paths.root_dir_path,
                                                "run_files/run_optimizee.py"))
     # Ready file for a generation
@@ -112,7 +112,7 @@ def run_experiment():
 
     # Outer-loop optimizer initialization
     optimizer_seed = 1234
-    optimizer_parameters = EnsembleKalmanFilterParameters(gamma=0,
+    optimizer_parameters = EnsembleKalmanFilterParameters(gamma=0.1,
                                                           maxit=1,
                                                           n_ensembles=1,
                                                           n_iteration=1,
