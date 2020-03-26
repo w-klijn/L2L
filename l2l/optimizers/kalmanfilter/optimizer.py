@@ -175,7 +175,6 @@ class EnsembleKalmanFilter(Optimizer):
                                range(ensemble_size)])
         model_outs = model_outs.reshape(ensemble_size, 10, 1)
         observations = int(self.target_label[0])
-        # TODO normalize connection weights/ ens
 
         enkf = EnKF(maxit=traj.maxit,
                     online=traj.online,
@@ -207,39 +206,42 @@ class EnsembleKalmanFilter(Optimizer):
 
         generation_name = 'generation_{}'.format(traj.generation)
         traj.results.generation_params.f_add_result_group(generation_name)
-        ens_fitnesses = np.array(ens_fitnesses)
 
         generation_result_dict = {
             'generation': traj.generation,
-            'ensemble_fitnesses': ens_fitnesses,
+            'connection_weights': enkf.ensemble,
         }
         traj.results.generation_params.f_add_result(
             generation_name + '.algorithm_params', generation_result_dict)
 
-        if traj.generation > 1 and traj.generation % traj.sampling_generation == 0:
-            params, self.best_fitness, self.best_individual = self._new_individuals(
-                traj, ens_fitnesses, individuals, ensemble_size)
-            self.eval_pop = [dict(ens=params[i],
-                                  targets=self.targets)
-                             for i in range(traj.pop_size)]
-        else:
-            self.eval_pop = [dict(ens=ens_res[i],
-                                  targets=self.targets
-                                  )
-                             for i in range(traj.pop_size)]
-        traj.generation += 1
+        # if traj.generation > 1 and traj.generation % traj.sampling_generation == 0:
+        #     params, self.best_fitness, self.best_individual = self._new_individuals(
+        #         traj, ens_fitnesses, individuals, ensemble_size)
+        #     self.eval_pop = [dict(ens=params[i],
+        #                           targets=self.targets)
+        #                      for i in range(traj.pop_size)]
+        # else:
+        #     self.eval_pop = [dict(ens=ens_res[i],
+        #                           targets=self.targets
+        #                           )
+        #                      for i in range(traj.pop_size)]
+        # traj.generation += 1
         self.g += 1
         self._expand_trajectory(traj)
 
     @staticmethod
-    def _shape_weights(traj, ensemble_size, normalize=False, method='max'):
+    def _shape_weights(traj, ensemble_size, normalize=False, method='max',
+                       **kwargs):
         outs = [traj.current_results[i][1]['connection_weights'] for i in
                 range(ensemble_size)]
         scaler = 0.
         if normalize:
             if method == 'max':
-                scaler = np.max(outs)
-                outs /= scaler
+                scaler = np.max(outs, axis=kwargs.get('axis', None))
+                if np.ndim(outs) == 1:
+                    outs /= scaler
+                else:
+                    outs /= scaler.reshape(np.shape(outs)[0], -1)
             else:
                 raise KeyError(
                     'Normalizing method {} not known'.format(method))

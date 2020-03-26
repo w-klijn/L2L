@@ -62,8 +62,8 @@ class EnsembleKalmanFilter:
             self.gamma = gamma
 
         # copy the data so we do not overwrite the original arguments
-        self.ensemble = ensemble.clone()
-        self.observations = observations.clone()
+        self.ensemble = ensemble
+        self.observations = observations
         self.observations = _encode_targets(observations, self.gamma_s)
         # convert to pytorch
         self.ensemble = torch.as_tensor(
@@ -104,6 +104,7 @@ def _update_step(ensemble, observations, g, gamma, Cpp, Cup):
     Update step of the kalman filter
     Calculates the covariances and returns new ensembles
     """
+    # return ensemble + (Cup @ np.linalg.lstsq(Cpp+gamma, (observations - g).T)[0]).T
     return torch.mm(Cup, torch.lstsq((observations-g).t(), Cpp+gamma)[0]).t() + ensemble
 
 
@@ -127,7 +128,7 @@ def _get_shapes(observations, model_output):
                           of network)
     :returns dimensions, number of observations (and data)
     """
-    if len(model_output.size()) > 2:
+    if model_output.size > 2:
         gamma_shape = model_output.shape[1]
     else:
         gamma_shape = model_output.shape[0]
