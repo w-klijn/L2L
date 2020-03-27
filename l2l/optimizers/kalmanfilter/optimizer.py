@@ -165,12 +165,10 @@ class EnsembleKalmanFilter(Optimizer):
 
         individuals = traj.individuals[traj.generation]
         gamma = np.eye(10) * traj.gamma
-        ens_res = []
-        ens_fitnesses = []
 
         ensemble_size = traj.pop_size
         ens, scaler = self._shape_weights(traj, ensemble_size, normalize=True,
-                                          method='max')
+                                          method='max', **{'axis': 0})
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
         model_outs = model_outs.reshape(ensemble_size, 10, 1)
@@ -184,6 +182,7 @@ class EnsembleKalmanFilter(Optimizer):
                  observations=np.array(observations)[np.newaxis],
                  model_output=model_outs,
                  gamma=gamma)
+        results = enkf.ensemble.numpy() * scaler
 
         # # go over all individuals
         # for i in individuals:
@@ -204,16 +203,6 @@ class EnsembleKalmanFilter(Optimizer):
         #              gamma=gamma)
         #     ens_res.append(enkf.ensemble)
 
-        generation_name = 'generation_{}'.format(traj.generation)
-        traj.results.generation_params.f_add_result_group(generation_name)
-
-        generation_result_dict = {
-            'generation': traj.generation,
-            'connection_weights': enkf.ensemble,
-        }
-        traj.results.generation_params.f_add_result(
-            generation_name + '.algorithm_params', generation_result_dict)
-
         # if traj.generation > 1 and traj.generation % traj.sampling_generation == 0:
         #     params, self.best_fitness, self.best_individual = self._new_individuals(
         #         traj, ens_fitnesses, individuals, ensemble_size)
@@ -225,8 +214,17 @@ class EnsembleKalmanFilter(Optimizer):
         #                           targets=self.targets
         #                           )
         #                      for i in range(traj.pop_size)]
-        # traj.generation += 1
+        traj.generation += 1
         self.g += 1
+        generation_name = 'generation_{}'.format(traj.generation)
+        traj.results.generation_params.f_add_result_group(generation_name)
+
+        generation_result_dict = {
+            'generation': traj.generation,
+            'connection_weigts': results
+        }
+        traj.results.generation_params.f_add_result(
+            generation_name + '.algorithm_params', generation_result_dict)
         self._expand_trajectory(traj)
 
     @staticmethod

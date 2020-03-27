@@ -569,14 +569,15 @@ class StructuralPlasticityOptimizee(Optimizee):
         # set lower simulation time
         # self.t_sim = 10000.
         # Start training/simulation
-        gen_idx = traj.individual.generation
-        print('Iteration {}'.format(gen_idx))
+        self.gen_idx = traj.individual.generation
+        self.ind_idx = traj.individual.ind_idx
+        print('Iteration {}'.format(self.gen_idx))
         # self.prepare_connect_simulation()
         # load connections and set
         nest.PrintNetwork(depth=2)
         self.prepare_network()
-        replace_weights(gen_idx, self.ind_idx, self.path)
-        self._run_simulation(gen_idx,
+        replace_weights(self.gen_idx, self.ind_idx, traj, self.path)
+        self._run_simulation(self.gen_idx,
                              traj.individual.train_px_one,
                              record_mean=True)
         model_out = softmax(
@@ -587,13 +588,18 @@ class StructuralPlasticityOptimizee(Optimizee):
         # weights *= enkf_run.scaler
         # print('Scaler: ', enkf_run.scaler)
         # print(weights)
-        self.plot_all(gen_idx)
+        self.plot_all(self.gen_idx)
         self.clear_records()
         # return connection weights
         conns = nest.GetConnections(source=self.net_structure)
         status = nest.GetStatus(conns)
         conn_w = [s.get('weight') for s in status]
-        return dict(model_out=model_out, connection_weights=conn_w)
+        target_label = int(traj.individual.targets[0])
+        target = np.zeros(10)
+        target[target_label] = 1.0
+        fitness = ((target - model_out) ** 2).sum()
+        return dict(fitness=fitness, model_out=model_out,
+                    connection_weights=conn_w)
 
     def _run_simulation(self, j, train_px_one, record_mean=False):
         """
@@ -623,12 +629,19 @@ def save_connections(conn, gen_idx, ind_idx, path='.'):
         os.path.join(path, 'connections_g{}_i{}.csv'.format(gen_idx, ind_idx)))
 
 
-def replace_weights(gen_idx, ind_idx, path='.'):
-    conns = pd.read_csv(
-        os.path.join(path, 'connections_g{}_i{}.csv'.format(gen_idx, ind_idx)))
+def replace_weights(gen_idx, ind_idx, traj, path='.'):
+    if gen_idx == 0:
+        conns = pd.read_csv(
+            os.path.join(path, 'connections_g{}_i{}.csv'.format(gen_idx,
+                                                                ind_idx)))
+        weights = conns['weight'].values
+    else:
+        conns = pd.read_csv(
+            os.path.join(path, 'connections_g{}_i{}.csv'.format(0, 0)))
+        weights = traj.individual.connection_weights
+
     sources = conns['source'].values
     targets = conns['target'].values
-    weights = conns['weight'].values
     print('now replacing connection weights')
     nest.Connect(list(sources), list(targets), conn_spec='one_to_one',
                  syn_spec={'weight': list(weights)})

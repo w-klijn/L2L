@@ -115,7 +115,7 @@ def run_experiment():
     optimizer_parameters = EnsembleKalmanFilterParameters(gamma=0.1,
                                                           maxit=1,
                                                           n_ensembles=1,
-                                                          n_iteration=1,
+                                                          n_iteration=2,
                                                           pop_size=1,
                                                           n_batches=1,
                                                           online=False,
