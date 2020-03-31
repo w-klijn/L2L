@@ -141,7 +141,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.other_lbl = None
         self.test_px = None
         self.test_lbl = None
-        self.prepare_network()
+        
 
     def prepare_network(self):
         self.reset_kernel()
@@ -157,12 +157,12 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.ResetKernel()
         nest.set_verbosity('M_ERROR')
         nest.SetKernelStatus({'resolution': self.dt,
-                              'grng_seed': 0,
+                              #'grng_seed': 0,
                               'local_num_threads': 4})
 
-        nest.SetStructuralPlasticityStatus({
-            'structural_plasticity_update_interval': self.update_interval,
-        })
+        #nest.SetStructuralPlasticityStatus({
+        #    'structural_plasticity_update_interval': self.update_interval,
+        #})
 
     def create_nodes(self):
         synaptic_elems_in = {
@@ -548,13 +548,13 @@ class StructuralPlasticityOptimizee(Optimizee):
         """
         set up the network and return the weights
         """
+        self.prepare_network()
         # Do the connections
-        # nest.EnableStructuralPlasticity()
         self.connect_internal_bulk()
         self.connect_external_input(self.number_input_neurons)
         self.connect_bulk_to_out()
         self.connect_input_spike_detectors()
-        # self.connect_internal_out()
+        
         conns = nest.GetConnections(source=self.net_structure)
         save_connections(conns, self.gen_idx, indx, path=self.path)
         return dict(connections=conns)
@@ -569,6 +569,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         # set lower simulation time
         # self.t_sim = 10000.
         # Start training/simulation
+
+        self.prepare_network()
         self.gen_idx = traj.individual.generation
         self.ind_idx = traj.individual.ind_idx
         print('Iteration {}'.format(self.gen_idx))
