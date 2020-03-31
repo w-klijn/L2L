@@ -165,11 +165,16 @@ class EnsembleKalmanFilter(Optimizer):
         ensemble_size = traj.pop_size
         # TODO before scaling the weights, check for the shapes and adjust
         #  with `_sample_from_individual`
-        ens, scaler = self._shape_weights(traj, ensemble_size, normalize=True,
+        weights = [traj.current_results[i][1]['connection_weights'] for i in
+                   range(ensemble_size)]
+        fitness = [traj.current_results[i][1]['fitness'] for i in
+                   range(ensemble_size)]
+        weights = self._sample_from_individual(weights, fitness)
+        ens, scaler = self._shape_weights(weights, normalize=True,
                                           method='max', **{'axis': 0})
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
-        model_outs = model_outs.reshape(ensemble_size, 10, 1)
+        model_outs = model_outs.reshape((ensemble_size, 10, 1))
         observations = int(self.target_label[0])
 
         enkf = EnKF(maxit=traj.maxit,
@@ -226,43 +231,48 @@ class EnsembleKalmanFilter(Optimizer):
         self._expand_trajectory(traj)
 
     @staticmethod
-    def _shape_weights(traj, ensemble_size, normalize=False, method='max',
+    def _shape_weights(weights, normalize=False, method='max',
                        **kwargs):
-        outs = [traj.current_results[i][1]['connection_weights'] for i in
-                range(ensemble_size)]
-        outs = np.array(outs)
         scaler = 0.
         if normalize:
             if method == 'max':
-                scaler = np.max(outs, axis=kwargs.get('axis', None))
-                if np.ndim(outs) == 1:
-                    outs /= scaler
+                scaler = np.max(weights, axis=kwargs.get('axis', None))
+                if np.ndim(weights) == 1:
+                    weights /= scaler
                 else:
-                    outs /= scaler.reshape(np.shape(outs)[0], -1)
+                    weights /= scaler.reshape(np.shape(weights)[0], -1)
             else:
                 raise KeyError(
                     'Normalizing method {} not known'.format(method))
-        return outs, scaler
+        return weights, scaler
 
     @staticmethod
     def _sample_from_individual(individuals, fitness, bins='auto'):
         """
         The lengths of the individuals may differ. To fill the individuals to
-        the same length sample values from the individual with the best
-        fitness.
+        the same length sample values from the distribution of the individual
+        with the best fitness.
         """
+        # best fitness should be here ~ 0 (which means correct choice)
         idx = np.argmin(fitness)
         best_ind = individuals[idx]
+        best_min = np.min(best_ind)
+        best_max = np.max(best_ind)
         hist = np.histogram(best_ind, bins)
         hist_dist = scipy.stats.rv_histogram(hist)
         # get the longest individual
         longest_ind = individuals[np.argmax([len(ind) for ind in individuals])]
+        new_inds = []
         for inds in individuals:
             subs = len(longest_ind) - len(inds)
             if subs > 0:
-                inds.append(hist_dist(subs))
-        return individuals
-
+                rnd = np.random.uniform(best_min, best_max, subs)
+                inds.extend(hist_dist(rnd))
+                new_inds.append(inds)
+            else:
+                # only if subs is the longest individual
+                new_inds.append(inds)
+        return new_inds
 
     @staticmethod
     def _create_individual_distribution(random_state, weights,

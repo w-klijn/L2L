@@ -19,9 +19,9 @@
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import matplotlib.pyplot as plt
 # IMPORT LIBS
 import pickle
+import matplotlib.pyplot as plt
 import nest
 import numpy as np
 import os
@@ -141,7 +141,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.other_lbl = None
         self.test_px = None
         self.test_lbl = None
-        
 
     def prepare_network(self):
         self.reset_kernel()
@@ -157,12 +156,12 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.ResetKernel()
         nest.set_verbosity('M_ERROR')
         nest.SetKernelStatus({'resolution': self.dt,
-                              #'grng_seed': 0,
+                              # 'grng_seed': 0,
                               'local_num_threads': 4})
 
-        #nest.SetStructuralPlasticityStatus({
+        # nest.SetStructuralPlasticityStatus({
         #    'structural_plasticity_update_interval': self.update_interval,
-        #})
+        # })
 
     def create_nodes(self):
         synaptic_elems_in = {
@@ -595,6 +594,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         # return connection weights
         conns = nest.GetConnections(source=self.net_structure)
         status = nest.GetStatus(conns)
+        save_connections(conns, self.gen_idx, self.ind_idx, self.path)
         conn_w = [s.get('weight') for s in status]
         target_label = int(traj.individual.targets[0])
         target = np.zeros(10)
@@ -645,14 +645,9 @@ def replace_weights(gen_idx, ind_idx, traj, path='.'):
     sources = conns['source'].values
     targets = conns['target'].values
     weights = conns['weight'].values
-    #print('net_structure')
-    #print(net_structure)
     print('now replacing connection weights')
     for (s, t, w) in zip(sources, targets, weights):
-        # if s or t not in net_structure:
-        #     continue
         syn_spec = {'weight': w}
-        #print(s, t, w)
         nest.Connect(tuple([s]), tuple([t]), syn_spec=syn_spec,
                      conn_spec='one_to_one')
     # conns = nest.GetConnections(source=net_structure)
