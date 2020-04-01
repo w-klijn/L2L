@@ -5,6 +5,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+import sklearn.preprocessing as pp
 
 from collections import namedtuple
 from l2l.optimizers.kalmanfilter.enkf import EnsembleKalmanFilter as EnKF
@@ -169,9 +170,9 @@ class EnsembleKalmanFilter(Optimizer):
                    range(ensemble_size)]
         fitness = [traj.current_results[i][1]['fitness'] for i in
                    range(ensemble_size)]
-        weights = self._sample_from_individual(weights, fitness)
-        ens, scaler = self._shape_weights(weights, normalize=True,
-                                          method='max', **{'axis': 0})
+        weights = self._sample_from_individual(weights, fitness, bins=10000)
+        ens, scaler = self._scale_weights(weights, normalize=True,
+                                          method=pp.Normalizer)
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
         model_outs = model_outs.reshape((ensemble_size, 10, 1))
@@ -185,7 +186,7 @@ class EnsembleKalmanFilter(Optimizer):
                  observations=np.array(observations)[np.newaxis],
                  model_output=model_outs,
                  gamma=gamma)
-        results = enkf.ensemble.numpy() * scaler
+        results = scaler.inverse_transform(enkf.ensemble)
 
         # # go over all individuals
         # for i in individuals:
@@ -231,23 +232,17 @@ class EnsembleKalmanFilter(Optimizer):
         self._expand_trajectory(traj)
 
     @staticmethod
-    def _shape_weights(weights, normalize=False, method='max',
+    def _scale_weights(weights, normalize=False, method=pp.MinMaxScaler,
                        **kwargs):
         scaler = 0.
         if normalize:
-            if method == 'max':
-                scaler = np.max(weights, axis=kwargs.get('axis', None))
-                if np.ndim(weights) == 1:
-                    weights /= scaler
-                else:
-                    weights /= scaler.reshape(np.shape(weights)[0], -1)
-            else:
-                raise KeyError(
-                    'Normalizing method {} not known'.format(method))
+            scaler = method(kwargs)
+            scaler.fit_transform(weights)
         return weights, scaler
 
     @staticmethod
-    def _sample_from_individual(individuals, fitness, bins='auto'):
+    def _sample_from_individual(individuals, fitness, bins='auto',
+                                method='interpolate'):
         """
         The lengths of the individuals may differ. To fill the individuals to
         the same length sample values from the distribution of the individual
@@ -259,7 +254,15 @@ class EnsembleKalmanFilter(Optimizer):
         best_min = np.min(best_ind)
         best_max = np.max(best_ind)
         hist = np.histogram(best_ind, bins)
-        hist_dist = scipy.stats.rv_histogram(hist)
+        if method == "interpolate":
+            # for interpolation it is better to reduce the max and min values
+            best_max -= 100
+            best_min += 100
+            hist_dist = scipy.interpolate.interp1d(hist[1][:-1], hist[0])
+        elif method == 'rv_histogram':
+            hist_dist = scipy.stats.rv_histogram(hist)
+        else:
+            raise KeyError('Sampling method {} not known'.format(method))
         # get the longest individual
         longest_ind = individuals[np.argmax([len(ind) for ind in individuals])]
         new_inds = []
