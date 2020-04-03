@@ -19,9 +19,9 @@
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import matplotlib.pyplot as plt
 # IMPORT LIBS
 import pickle
+import matplotlib.pyplot as plt
 import nest
 import numpy as np
 import os
@@ -144,7 +144,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.other_lbl = None
         self.test_px = None
         self.test_lbl = None
-        
 
     def prepare_network(self):
         self.reset_kernel()
@@ -160,12 +159,12 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.ResetKernel()
         nest.set_verbosity('M_ERROR')
         nest.SetKernelStatus({'resolution': self.dt,
-                              #'grng_seed': 0,
+                              # 'grng_seed': 0,
                               'local_num_threads': 4})
 
-        #nest.SetStructuralPlasticityStatus({
+        # nest.SetStructuralPlasticityStatus({
         #    'structural_plasticity_update_interval': self.update_interval,
-        #})
+        # })
 
     def create_nodes(self):
         synaptic_elems_in = {
@@ -616,6 +615,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         status_i = nest.GetStatus(conns)
         we = [s.get('weight') for s in status_e]
         wi = [s.get('weight') for s in status_i]
+        # Do we need to store these weights?
         target_label = int(traj.individual.targets[0])
         target = np.zeros(10)
         target[target_label] = 1.0

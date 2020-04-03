@@ -4,6 +4,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy
+import sklearn.preprocessing as pp
 
 from collections import namedtuple
 from l2l.optimizers.kalmanfilter.enkf import EnsembleKalmanFilter as EnKF
@@ -79,7 +81,7 @@ class EnsembleKalmanFilter(Optimizer):
                              comment='Root folder for the simulation')
 
         _, self.optimizee_individual_dict_spec = dict_to_list(
-            self.optimizee_create_individual(), get_dict_spec=True)
+            self.optimizee_create_individual(0), get_dict_spec=True)
 
         traj.results.f_add_result_group('generation_params')
 
@@ -121,11 +123,6 @@ class EnsembleKalmanFilter(Optimizer):
         # get the targets
         self.get_mnist_data()
         self.get_external_input()
-        # TODO remove next lines if unused
-        # remove previous files
-        # files = ['eps', 'bin', 'csv', 'pkl']
-        # print('Removing files {}'.format(files))
-        # self._remove_files(files)
 
         for e in self.eval_pop:
             e["targets"] = self.target_label
@@ -167,11 +164,18 @@ class EnsembleKalmanFilter(Optimizer):
         gamma = np.eye(10) * traj.gamma
 
         ensemble_size = traj.pop_size
-        ens, scaler = self._shape_weights(traj, ensemble_size, normalize=True,
-                                          method='max', **{'axis': 0})
+        # TODO before scaling the weights, check for the shapes and adjust
+        #  with `_sample_from_individual`
+        weights = [traj.current_results[i][1]['connection_weights'] for i in
+                   range(ensemble_size)]
+        fitness = [traj.current_results[i][1]['fitness'] for i in
+                   range(ensemble_size)]
+        weights = self._sample_from_individual(weights, fitness, bins=10000)
+        ens, scaler = self._scale_weights(weights, normalize=True,
+                                          method=pp.Normalizer)
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
-        model_outs = model_outs.reshape(ensemble_size, 10, 1)
+        model_outs = model_outs.reshape((ensemble_size, 10, 1))
         observations = int(self.target_label[0])
 
         enkf = EnKF(maxit=traj.maxit,
@@ -182,7 +186,7 @@ class EnsembleKalmanFilter(Optimizer):
                  observations=np.array(observations)[np.newaxis],
                  model_output=model_outs,
                  gamma=gamma)
-        results = enkf.ensemble.numpy() * scaler
+        results = scaler.inverse_transform(enkf.ensemble)
 
         # # go over all individuals
         # for i in individuals:
@@ -228,22 +232,50 @@ class EnsembleKalmanFilter(Optimizer):
         self._expand_trajectory(traj)
 
     @staticmethod
-    def _shape_weights(traj, ensemble_size, normalize=False, method='max',
+    def _scale_weights(weights, normalize=False, method=pp.MinMaxScaler,
                        **kwargs):
-        outs = [traj.current_results[i][1]['connection_weights'] for i in
-                range(ensemble_size)]
         scaler = 0.
         if normalize:
-            if method == 'max':
-                scaler = np.max(outs, axis=kwargs.get('axis', None))
-                if np.ndim(outs) == 1:
-                    outs /= scaler
-                else:
-                    outs /= scaler.reshape(np.shape(outs)[0], -1)
+            scaler = method(kwargs)
+            scaler.fit_transform(weights)
+        return weights, scaler
+
+    @staticmethod
+    def _sample_from_individual(individuals, fitness, bins='auto',
+                                method='interpolate'):
+        """
+        The lengths of the individuals may differ. To fill the individuals to
+        the same length sample values from the distribution of the individual
+        with the best fitness.
+        """
+        # best fitness should be here ~ 0 (which means correct choice)
+        idx = np.argmin(fitness)
+        best_ind = individuals[idx]
+        best_min = np.min(best_ind)
+        best_max = np.max(best_ind)
+        hist = np.histogram(best_ind, bins)
+        if method == "interpolate":
+            # for interpolation it is better to reduce the max and min values
+            best_max -= 100
+            best_min += 100
+            hist_dist = scipy.interpolate.interp1d(hist[1][:-1], hist[0])
+        elif method == 'rv_histogram':
+            hist_dist = scipy.stats.rv_histogram(hist)
+        else:
+            raise KeyError('Sampling method {} not known'.format(method))
+        # get the longest individual
+        longest_ind = individuals[np.argmax([len(ind) for ind in individuals])]
+        new_inds = []
+        for inds in individuals:
+            subs = len(longest_ind) - len(inds)
+            if subs > 0:
+                rnd = np.random.uniform(best_min, best_max, subs)
+                inds.extend(hist_dist(rnd))
+                new_inds.append(inds)
             else:
-                raise KeyError(
-                    'Normalizing method {} not known'.format(method))
-        return outs, scaler
+                # only if subs is the longest individual
+                new_inds.append(inds)
+        return new_inds
 
     @staticmethod
     def _create_individual_distribution(random_state, weights,
