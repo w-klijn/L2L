@@ -48,6 +48,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.input_type = 'greyvalue'
         # simulated time (ms)
         self.t_sim = 1000.  # 60000.0
+        self.warm_up_time = 4000.
         # simulation step (ms).
         self.dt = 0.1
 
@@ -98,7 +99,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.total_connections_i_out_0 = []
 
         self.rates = []
-        self.net_structure = ()
+        self.net_structure_e = ()
+        self.net_structure_i = ()
 
         self.psc_in = 585.0
         self.psc_e = 485.0
@@ -130,7 +132,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.growth_curve_out_i_e = growth_curves.out_i_e
         self.growth_curve_out_i_i = growth_curves.out_i_i
 
-        self.path = parameters.path
+        self.path_e = parameters.path_e
+        self.path_i = parameters.path_i
         self.ind_idx = traj.individual.ind_idx
         self.gen_idx = traj.individual.generation
 
@@ -193,7 +196,8 @@ class StructuralPlasticityOptimizee(Optimizee):
                                    {
                                        'synaptic_elements': synaptic_elems_bulk_i})
 
-        self.net_structure += self.nodes_in + self.nodes_e + self.nodes_i
+        self.net_structure_e += self.nodes_in + self.nodes_e 
+        self.net_structure_i += self.nodes_i
 
         self.nodes_out_e = []
         self.nodes_out_i = []
@@ -219,19 +223,20 @@ class StructuralPlasticityOptimizee(Optimizee):
                                                 {
                                                     'synaptic_elements': synaptic_elems_out_i}))
 
-            self.net_structure += self.nodes_out_e[ii] + self.nodes_out_i[ii]
+            self.net_structure_e += self.nodes_out_e[ii] 
+            self.net_structure_i += self.nodes_out_i[ii]
 
     @staticmethod
     def create_synapses():
         nest.CopyModel('static_synapse', 'random_synapse')
-        nest.SetDefaults('random_synapse',
-                         {'weight': 1.0,
-                          'delay': 1.0})
+        #nest.SetDefaults('random_synapse',
+        #                 {'weight': 1.0,
+        #                  'delay': 1.0})
 
         nest.CopyModel('static_synapse', 'random_synapse_i')
-        nest.SetDefaults('random_synapse_i',
-                         {'weight': -1.,
-                          'delay': 1.0})
+        #nest.SetDefaults('random_synapse_i',
+        #                 {'weight': -1.,
+        #                  'delay': 1.0})
 
     def create_input_spike_detectors(self):
         self.input_spike_detector = nest.Create("spike_detector",
@@ -373,9 +378,9 @@ class StructuralPlasticityOptimizee(Optimizee):
     def connect_bulk_to_out(self):
         # Bulk to out
         conn_dict_e = {'rule': 'fixed_indegree',
-                       'indegree': int(0.3 * self.number_out_exc_neurons)}
+                       'indegree': int(0.3 * self.number_bulk_exc_neurons)}
         conn_dict_i = {'rule': 'fixed_indegree',
-                       'indegree': int(0.2 * self.number_out_inh_neurons)}
+                       'indegree': int(0.2 * self.number_bulk_exc_neurons)}
         for j in range(10):
             nest.Connect(self.nodes_e, self.nodes_out_e[j], conn_dict_e,
                          syn_spec=self.syn_dict_e)
@@ -508,6 +513,7 @@ class StructuralPlasticityOptimizee(Optimizee):
 
     def net_simulate(self):
         print("Starting simulation")
+        nest.Simulate(self.warm_up_time)
         sim_steps = np.arange(0, self.t_sim, self.record_interval)
         for i, step in enumerate(sim_steps):
             nest.Simulate(self.record_interval)
@@ -544,7 +550,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
-    def create_individual(self, indx):
+    def connect_network(self):
         """
         set up the network and return the weights
         """
@@ -555,9 +561,16 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.connect_bulk_to_out()
         self.connect_input_spike_detectors()
         
-        conns = nest.GetConnections(source=self.net_structure)
-        save_connections(conns, self.gen_idx, indx, path=self.path)
-        return dict(connections=conns)
+        self.conns_e = nest.GetConnections(source=self.net_structure_e)
+        save_connections(self.conns_e, self.gen_idx, indx, path=self.path_e)
+        self.conns_i = nest.GetConnections(source=self.net_structure_i)
+        save_connections(self.conns_i, self.gen_idx, indx, path=self.path_i)
+        
+    def create_individual(self, indx):
+        self.connect_network()
+        weights_e = np.random.normal(self.psc_e,100.,len(self.conns_e))
+        weights_i = np.random.uniform(self.psc_i,100.,len(self.conns_i))
+        return {'weights_e':conns_e, 'weights_i':conns_i}
 
     def simulate(self, traj):
         """
@@ -569,7 +582,6 @@ class StructuralPlasticityOptimizee(Optimizee):
         # set lower simulation time
         # self.t_sim = 10000.
         # Start training/simulation
-
         self.prepare_network()
         self.gen_idx = traj.individual.generation
         self.ind_idx = traj.individual.ind_idx
@@ -577,11 +589,15 @@ class StructuralPlasticityOptimizee(Optimizee):
         # self.prepare_connect_simulation()
         # load connections and set
         nest.PrintNetwork(depth=2)
-        self.prepare_network()
-        replace_weights(self.gen_idx, self.ind_idx, traj, self.path)
+        self.weights_e = traj.individual.weights_e
+        self.weights_i = traj.individual.weights_i
+        replace_weights(self.gen_idx, self.ind_idx, traj, self.path_e, weights_e)
+        replace_weights(self.gen_idx, self.ind_idx, traj, self.path_i, weights_i)
+
         self._run_simulation(self.gen_idx,
                              traj.individual.train_px_one,
                              record_mean=True)
+
         model_out = softmax(
             [self.mean_ca_e_out[j][-1] for j in range(10)])
         # np.save('model_out.npy', model_out)
@@ -593,15 +609,19 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.plot_all(self.gen_idx)
         self.clear_records()
         # return connection weights
-        conns = nest.GetConnections(source=self.net_structure)
-        status = nest.GetStatus(conns)
-        conn_w = [s.get('weight') for s in status]
+        # why do we return the connection weights? they don't change during the run
+        conns = nest.GetConnections(source=self.net_structure_e)
+        status_e = nest.GetStatus(conns)
+        conns = nest.GetConnections(source=self.net_structure_i)
+        status_i = nest.GetStatus(conns)
+        we = [s.get('weight') for s in status_e]
+        wi = [s.get('weight') for s in status_i]
         target_label = int(traj.individual.targets[0])
         target = np.zeros(10)
         target[target_label] = 1.0
         fitness = ((target - model_out) ** 2).sum()
         return dict(fitness=fitness, model_out=model_out,
-                    connection_weights=conn_w)
+                    weight_e=we, weight_i=wi)
 
     def _run_simulation(self, j, train_px_one, record_mean=False):
         """
@@ -623,7 +643,7 @@ def save_connections(conn, gen_idx, ind_idx, path='.'):
     for elem in status:
         d['source'].append(elem.get('source'))
         d['target'].append(elem.get('target'))
-        d['weight'].append(elem.get('weight'))
+        #d['weight'].append(elem.get('weight'))
     df = pd.DataFrame(d)
     df.to_pickle(
         os.path.join(path, 'connections_g{}_i{}.pkl'.format(gen_idx, ind_idx)))
@@ -631,30 +651,22 @@ def save_connections(conn, gen_idx, ind_idx, path='.'):
         os.path.join(path, 'connections_g{}_i{}.csv'.format(gen_idx, ind_idx)))
 
 
-def replace_weights(gen_idx, ind_idx, traj, path='.'):
+def replace_weights(gen_idx, ind_idx, traj, path='.', weights):
     if gen_idx == 0:
         conns = pd.read_csv(
             os.path.join(path, 'connections_g{}_i{}.csv'.format(gen_idx,
                                                                 ind_idx)))
-        weights = conns['weight'].values
+        #weights = conns['weight'].values
     else:
         conns = pd.read_csv(
             os.path.join(path, 'connections_g{}_i{}.csv'.format(0, 0)))
-        weights = traj.individual.connection_weights
+        #weights = traj.individual.connection_weights
 
     sources = conns['source'].values
     targets = conns['target'].values
-    weights = conns['weight'].values
-    #print('net_structure')
-    #print(net_structure)
+    #weights = conns['weight'].values
     print('now replacing connection weights')
     for (s, t, w) in zip(sources, targets, weights):
-        # if s or t not in net_structure:
-        #     continue
         syn_spec = {'weight': w}
-        #print(s, t, w)
         nest.Connect(tuple([s]), tuple([t]), syn_spec=syn_spec,
                      conn_spec='one_to_one')
-    # conns = nest.GetConnections(source=net_structure)
-    # for idx, j in enumerate(conns):
-    #     nest.SetStatus(tuple([j]), {'weight': weights[idx]})
