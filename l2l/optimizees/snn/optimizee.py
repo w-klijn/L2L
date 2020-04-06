@@ -609,19 +609,19 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.clear_records()
         # return connection weights
         # why do we return the connection weights? they don't change during the run
-        conns = nest.GetConnections(source=self.net_structure_e)
-        status_e = nest.GetStatus(conns)
-        conns = nest.GetConnections(source=self.net_structure_i)
-        status_i = nest.GetStatus(conns)
-        we = [s.get('weight') for s in status_e]
-        wi = [s.get('weight') for s in status_i]
+        # conns = nest.GetConnections(source=self.net_structure_e)
+        # status_e = nest.GetStatus(conns)
+        # conns = nest.GetConnections(source=self.net_structure_i)
+        # status_i = nest.GetStatus(conns)
+        # we = [s.get('weight') for s in status_e]
+        # wi = [s.get('weight') for s in status_i]
         # Do we need to store these weights?
         target_label = int(traj.individual.targets[0])
         target = np.zeros(10)
         target[target_label] = 1.0
         fitness = ((target - model_out) ** 2).sum()
-        return dict(fitness=fitness, model_out=model_out,
-                    weight_e=we, weight_i=wi)
+        return dict(fitness=fitness, model_out=model_out)#,
+                    #weight_e=we, weight_i=wi)
 
     def _run_simulation(self, j, train_px_one, record_mean=False):
         """

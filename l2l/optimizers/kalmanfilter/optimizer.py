@@ -166,10 +166,13 @@ class EnsembleKalmanFilter(Optimizer):
         ensemble_size = traj.pop_size
         # TODO before scaling the weights, check for the shapes and adjust
         #  with `_sample_from_individual`
-        weights = [traj.current_results[i][1]['connection_weights'] for i in
-                   range(ensemble_size)]
+        #weights = [traj.current_results[i][1]['connection_weights'] for i in
+        #           range(ensemble_size)]
+        weights = [individuals[i].weights_e+individuals[i].weights_i for i in range(ensemble_size)]
         fitness = [traj.current_results[i][1]['fitness'] for i in
                    range(ensemble_size)]
+        self.current_fitness = min(fitness)
+
         weights = self._sample_from_individual(weights, fitness, bins=10000)
         ens, scaler = self._scale_weights(weights, normalize=True,
                                           method=pp.Normalizer)
@@ -186,40 +189,9 @@ class EnsembleKalmanFilter(Optimizer):
                  observations=np.array(observations)[np.newaxis],
                  model_output=model_outs,
                  gamma=gamma)
+        # These are all the updated weights for each ensemble
         results = scaler.inverse_transform(enkf.ensemble)
-
-        # # go over all individuals
-        # for i in individuals:
-        #     # optimization
-        #     ens = fitnesses_results
-        #     # get the score/fitness of the individual
-        #     fitness_per_individual = traj.current_results[i.ind_idx][1][
-        #         'loss']
-        #     ens_fitnesses.append(fitness_per_individual)
-        #     model_output = traj.current_results[i.ind_idx][1]['out']
-        #     enkf = EnKF(maxit=traj.maxit,
-        #                 online=traj.online,
-        #                 n_batches=traj.n_batches)
-        #     enkf.fit(ensemble=ens,
-        #              ensemble_size=ensemble_size,
-        #              observations=self.targets,
-        #              model_output=model_output,
-        #              gamma=gamma)
-        #     ens_res.append(enkf.ensemble)
-
-        # if traj.generation > 1 and traj.generation % traj.sampling_generation == 0:
-        #     params, self.best_fitness, self.best_individual = self._new_individuals(
-        #         traj, ens_fitnesses, individuals, ensemble_size)
-        #     self.eval_pop = [dict(ens=params[i],
-        #                           targets=self.targets)
-        #                      for i in range(traj.pop_size)]
-        # else:
-        #     self.eval_pop = [dict(ens=ens_res[i],
-        #                           targets=self.targets
-        #                           )
-        #                      for i in range(traj.pop_size)]
-        traj.generation += 1
-        self.g += 1
+        
         generation_name = 'generation_{}'.format(traj.generation)
         traj.results.generation_params.f_add_result_group(generation_name)
 
@@ -229,8 +201,23 @@ class EnsembleKalmanFilter(Optimizer):
         }
         traj.results.generation_params.f_add_result(
             generation_name + '.algorithm_params', generation_result_dict)
-        self._expand_trajectory(traj)
 
+        # Produce the new generation of individuals
+        if self.g < traj.n_iteration - 1 and traj.stop_criterion > self.current_fitness:
+            # Create new individual based on the results of the update from the EnKF.
+            new_individual_list = [{'weights_e':results[i][:len(individuals[i].weights_e)], 'weights_i':results[i][len(individuals[i].weights_e):]} for i in self.ensemble_size]
+
+            # Check this bounding function
+            if self.optimizee_bounding_func is not None:
+                new_individual_list = [self.optimizee_bounding_func(ind) for ind in new_individual_list]
+            new_individual_list.append(current_individual_dict)
+
+            fitnesses_results.clear()
+            self.eval_pop = new_individual_list
+            self.g += 1  # Update generation counter
+            self._expand_trajectory(traj)
+
+        
     @staticmethod
     def _scale_weights(weights, normalize=False, method=pp.MinMaxScaler,
                        **kwargs):
