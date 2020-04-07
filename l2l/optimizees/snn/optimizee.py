@@ -565,11 +565,12 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.conns_i = nest.GetConnections(source=self.net_structure_i)
         save_connections(self.conns_i, self.gen_idx, indx, path=self.path,
                          typ='i')
+        return len(self.conns_e), len(self.conns_i)
 
-    def create_individual(self, indx):
-        self.connect_network(indx)
-        weights_e = np.random.normal(self.psc_e, 100., len(self.conns_e))
-        weights_i = np.random.normal(self.psc_i, 100., len(self.conns_i))
+    def create_individual(self, size_e, size_i):
+
+        weights_e = np.random.normal(self.psc_e, 100., size_e)
+        weights_i = np.random.normal(self.psc_i, 100., size_i)
         return {'weights_e': weights_e, 'weights_i': weights_i}
 
     def simulate(self, traj):

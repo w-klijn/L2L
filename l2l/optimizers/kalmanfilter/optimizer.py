@@ -47,6 +47,7 @@ class EnsembleKalmanFilter(Optimizer):
     """
 
     def __init__(self, traj,
+                 optimizee_prepare,
                  optimizee_create_individual,
                  optimizee_fitness_weights,
                  parameters,
@@ -90,7 +91,8 @@ class EnsembleKalmanFilter(Optimizer):
 
         #: The population (i.e. list of individuals) to be evaluated at the
         # next iteration
-        current_eval_pop = [self.optimizee_create_individual(i) for i in
+        size_e, size_i = self.optimizee_prepare(0) # Change 0 for a run id?
+        current_eval_pop = [self.optimizee_create_individual(size_e, size_i) for i in
                             range(parameters.pop_size)]
 
         if optimizee_bounding_func is not None:

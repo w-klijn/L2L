@@ -124,6 +124,7 @@ def run_experiment():
     logger.info("Optimizer parameters: %s", optimizer_parameters)
 
     optimizer = EnsembleKalmanFilter(traj,
+                                     optimizee_prepare = optimizee.connect_network,
                                      optimizee_create_individual=optimizee.create_individual,
                                      optimizee_fitness_weights=(1.,),
                                      parameters=optimizer_parameters,
