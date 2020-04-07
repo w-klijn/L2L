@@ -205,19 +205,20 @@ class EnsembleKalmanFilter(Optimizer):
         # Produce the new generation of individuals
         if self.g < traj.n_iteration - 1 and traj.stop_criterion > self.current_fitness:
             # Create new individual based on the results of the update from the EnKF.
-            new_individual_list = [{'weights_e':results[i][:len(individuals[i].weights_e)], 'weights_i':results[i][len(individuals[i].weights_e):]} for i in self.ensemble_size]
+            new_individual_list = [
+                {'weights_e': results[i][:len(individuals[i].weights_e)],
+                 'weights_i': results[i][len(individuals[i].weights_e):]} for i
+                in range(ensemble_size)]
 
             # Check this bounding function
             if self.optimizee_bounding_func is not None:
                 new_individual_list = [self.optimizee_bounding_func(ind) for ind in new_individual_list]
-            new_individual_list.append(current_individual_dict)
 
             fitnesses_results.clear()
             self.eval_pop = new_individual_list
             self.g += 1  # Update generation counter
             self._expand_trajectory(traj)
 
-        
     @staticmethod
     def _scale_weights(weights, normalize=False, method=pp.MinMaxScaler,
                        **kwargs):
