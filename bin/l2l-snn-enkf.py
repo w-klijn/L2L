@@ -74,7 +74,7 @@ def run_experiment():
     # CPU cores per MPI process
     traj.f_add_parameter_to_group("JUBE_params", "cpu_pp", "1")
     # Threads per process
-    traj.f_add_parameter_to_group("JUBE_params", "threads_pp", "1")
+    traj.f_add_parameter_to_group("JUBE_params", "threads_pp", "4")
     # Type of emails to be sent from the scheduler
     traj.f_add_parameter_to_group("JUBE_params", "mail_mode", "ALL")
     # Email to notify events from the scheduler
@@ -116,15 +116,16 @@ def run_experiment():
                                                           maxit=1,
                                                           n_ensembles=1,
                                                           n_iteration=2,
-                                                          pop_size=1,
+                                                          pop_size=2,
                                                           n_batches=1,
                                                           online=False,
                                                           seed=1234,
+                                                          stop_criterion=1e-4,
                                                           path=paths.root_dir_path)
     logger.info("Optimizer parameters: %s", optimizer_parameters)
 
     optimizer = EnsembleKalmanFilter(traj,
-                                     optimizee_prepare = optimizee.connect_network,
+                                     optimizee_prepare=optimizee.connect_network,
                                      optimizee_create_individual=optimizee.create_individual,
                                      optimizee_fitness_weights=(1.,),
                                      parameters=optimizer_parameters,

@@ -20,7 +20,7 @@ logger = logging.getLogger("optimizers.kalmanfilter")
 EnsembleKalmanFilterParameters = namedtuple(
     'EnsembleKalmanFilter', ['gamma', 'maxit', 'n_iteration', 'n_ensembles',
                              'pop_size', 'n_batches', 'online', 'seed', 'path',
-                             ]
+                             'stop_criterion']
 )
 
 EnsembleKalmanFilterParameters.__doc__ = """
@@ -37,7 +37,9 @@ EnsembleKalmanFilterParameters.__doc__ = """
         value 
 :param seed: The random seed used to sample and fit the distribution. 
              Uses a random generator seeded with this seed.
-:param path: String, Root path for the file saving and loading the connections 
+:param path: String, Root path for the file saving and loading the connections
+:param stop_criterion: float, When the current fitness is smaller or equal the 
+       `stop_criterion` the optimization in the outer loop ends
 """
 
 
@@ -61,6 +63,7 @@ class EnsembleKalmanFilter(Optimizer):
         self.optimizee_bounding_func = optimizee_bounding_func
         self.optimizee_create_individual = optimizee_create_individual
         self.optimizee_fitness_weights = optimizee_fitness_weights
+        self.optimizee_prepare = optimizee_prepare
         self.parameters = parameters
 
         traj.f_add_parameter('gamma', parameters.gamma, comment='Noise level')
@@ -80,19 +83,22 @@ class EnsembleKalmanFilter(Optimizer):
         traj.f_add_parameter('pop_size', parameters.pop_size)
         traj.f_add_parameter('path', parameters.path,
                              comment='Root folder for the simulation')
-
+        traj.f_add_parameter('stop_criterion', parameters.stop_criterion,
+                             comment='stopping threshold')
+        #: The population (i.e. list of individuals) to be evaluated at the
+        # next iteration
+        size_e, size_i = self.optimizee_prepare()  # Change 0 for a run id?
         _, self.optimizee_individual_dict_spec = dict_to_list(
-            self.optimizee_create_individual(0), get_dict_spec=True)
+            self.optimizee_create_individual(size_e, size_i),
+            get_dict_spec=True)
 
         traj.results.f_add_result_group('generation_params')
 
         # Set the random state seed for distribution
         self.random_state = np.random.RandomState(traj.parameters.seed)
 
-        #: The population (i.e. list of individuals) to be evaluated at the
-        # next iteration
-        size_e, size_i = self.optimizee_prepare(0) # Change 0 for a run id?
-        current_eval_pop = [self.optimizee_create_individual(size_e, size_i) for i in
+        current_eval_pop = [self.optimizee_create_individual(size_e, size_i)
+                            for i in
                             range(parameters.pop_size)]
 
         if optimizee_bounding_func is not None:
@@ -102,6 +108,7 @@ class EnsembleKalmanFilter(Optimizer):
         self.eval_pop = current_eval_pop
         self.best_fitness = 0.
         self.best_individual = None
+        self.current_fitness = np.inf
 
         # self.targets = parameters.observations
 
@@ -168,16 +175,18 @@ class EnsembleKalmanFilter(Optimizer):
         ensemble_size = traj.pop_size
         # TODO before scaling the weights, check for the shapes and adjust
         #  with `_sample_from_individual`
-        #weights = [traj.current_results[i][1]['connection_weights'] for i in
+        # weights = [traj.current_results[i][1]['connection_weights'] for i in
         #           range(ensemble_size)]
-        weights = [individuals[i].weights_e+individuals[i].weights_i for i in range(ensemble_size)]
+        weights = [np.concatenate(
+            (individuals[i].weights_e, individuals[i].weights_i))
+            for i in range(ensemble_size)]
         fitness = [traj.current_results[i][1]['fitness'] for i in
                    range(ensemble_size)]
-        self.current_fitness = min(fitness)
+        self.current_fitness = np.min(fitness)
 
         weights = self._sample_from_individual(weights, fitness, bins=10000)
         ens, scaler = self._scale_weights(weights, normalize=True,
-                                          method=pp.Normalizer)
+                                          method=pp.MinMaxScaler)
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
         model_outs = model_outs.reshape((ensemble_size, 10, 1))
@@ -193,19 +202,20 @@ class EnsembleKalmanFilter(Optimizer):
                  gamma=gamma)
         # These are all the updated weights for each ensemble
         results = scaler.inverse_transform(enkf.ensemble)
-        
+
         generation_name = 'generation_{}'.format(traj.generation)
         traj.results.generation_params.f_add_result_group(generation_name)
 
         generation_result_dict = {
             'generation': traj.generation,
-            'connection_weigts': results
+            'connection_weights': results
         }
         traj.results.generation_params.f_add_result(
             generation_name + '.algorithm_params', generation_result_dict)
 
         # Produce the new generation of individuals
-        if self.g < traj.n_iteration - 1 and traj.stop_criterion > self.current_fitness:
+        if self.g < len(
+                self.target_lbl) - 1 or traj.stop_criterion > self.current_fitness:
             # Create new individual based on the results of the update from the EnKF.
             new_individual_list = [
                 {'weights_e': results[i][:len(individuals[i].weights_e)],
@@ -214,7 +224,8 @@ class EnsembleKalmanFilter(Optimizer):
 
             # Check this bounding function
             if self.optimizee_bounding_func is not None:
-                new_individual_list = [self.optimizee_bounding_func(ind) for ind in new_individual_list]
+                new_individual_list = [self.optimizee_bounding_func(ind) for
+                                       ind in new_individual_list]
 
             fitnesses_results.clear()
             self.eval_pop = new_individual_list
@@ -226,8 +237,8 @@ class EnsembleKalmanFilter(Optimizer):
                        **kwargs):
         scaler = 0.
         if normalize:
-            scaler = method(kwargs)
-            scaler.fit_transform(weights)
+            scaler = method(**kwargs)
+            weights = scaler.fit_transform(weights)
         return weights, scaler
 
     @staticmethod
@@ -238,6 +249,10 @@ class EnsembleKalmanFilter(Optimizer):
         the same length sample values from the distribution of the individual
         with the best fitness.
         """
+        # check if the sizes are different otherwise skip
+        if len(set(
+                [len(individuals[i]) for i in range(len(individuals))])) == 1:
+            return individuals
         # best fitness should be here ~ 0 (which means correct choice)
         idx = np.argmin(fitness)
         best_ind = individuals[idx]

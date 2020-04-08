@@ -548,7 +548,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
-    def connect_network(self, indx):
+    def connect_network(self):
         """
         set up the network and return the weights
         """
@@ -559,6 +559,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.connect_bulk_to_out()
         self.connect_input_spike_detectors()
 
+        indx = self.ind_idx
         self.conns_e = nest.GetConnections(source=self.net_structure_e)
         save_connections(self.conns_e, self.gen_idx, indx, path=self.path,
                          typ='e')
@@ -580,15 +581,11 @@ class StructuralPlasticityOptimizee(Optimizee):
         :return: a single element :obj:`tuple` containing the value of the
             chosen function
         """
-        # set lower simulation time
-        # self.t_sim = 10000.
         # Start training/simulation
         self.prepare_network()
         self.gen_idx = traj.individual.generation
         self.ind_idx = traj.individual.ind_idx
         print('Iteration {}'.format(self.gen_idx))
-        # self.prepare_connect_simulation()
-        # load connections and set
         nest.PrintNetwork(depth=2)
         self.weights_e = traj.individual.weights_e
         self.weights_i = traj.individual.weights_i
@@ -603,15 +600,8 @@ class StructuralPlasticityOptimizee(Optimizee):
 
         model_out = softmax(
             [self.mean_ca_e_out[j][-1] for j in range(10)])
-        # np.save('model_out.npy', model_out)
-        # weights = enkf_run.run()
-        # print(weights)
-        # weights *= enkf_run.scaler
-        # print('Scaler: ', enkf_run.scaler)
-        # print(weights)
         self.plot_all(self.gen_idx)
         self.clear_records()
-        # return connection weights
         # why do we return the connection weights? they don't change during the run
         # conns = nest.GetConnections(source=self.net_structure_e)
         # status_e = nest.GetStatus(conns)
@@ -657,15 +647,9 @@ def save_connections(conn, gen_idx, ind_idx, path='.', typ='e'):
 
 
 def replace_weights(gen_idx, ind_idx, weights, path='.', typ='e'):
-    if gen_idx == 0:
-        conns = pd.read_csv(
-            os.path.join(path, '{}_connections_g{}_i{}.csv'.format(typ,
-                                                                    gen_idx,
-                                                                    ind_idx)))
-        # weights = conns['weight'].values
-    else:
-        conns = pd.read_csv(
-            os.path.join(path, '{}_connections_g{}_i{}.csv'.format(typ, 0, 0)))
+    # Read the connections, i.e. sources and targets
+    conns = pd.read_csv(
+        os.path.join(path, '{}_connections_g{}_i{}.csv'.format(typ, 0, 0)))
         # weights = traj.individual.connection_weights
 
     sources = conns['source'].values
