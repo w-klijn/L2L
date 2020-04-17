@@ -555,10 +555,10 @@ class StructuralPlasticityOptimizee(Optimizee):
         """
         self.prepare_network()
         # Do the connections
-        self.connect_internal_bulk()
         self.connect_external_input(self.number_input_neurons)
-        self.connect_bulk_to_out()
         self.connect_input_spike_detectors()
+        self.connect_internal_bulk()
+        self.connect_bulk_to_out()
 
         indx = self.ind_idx
         self.conns_e = nest.GetConnections(source=self.net_structure_e)
@@ -584,6 +584,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         """
         # Start training/simulation
         self.prepare_network()
+        self.connect_external_input(self.number_input_neurons)
+        self.connect_input_spike_detectors()
         self.gen_idx = traj.individual.generation
         self.ind_idx = traj.individual.ind_idx
         print('Iteration {}'.format(self.gen_idx))
