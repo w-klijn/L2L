@@ -215,7 +215,7 @@ class EnsembleKalmanFilter(Optimizer):
 
         # Produce the new generation of individuals
         if self.g < len(
-                self.target_lbl) or traj.stop_criterion > self.current_fitness \
+                self.target_lbl) or traj.stop_criterion >= self.current_fitness \
                 or self.g < traj.n_iteration:
             # Create new individual based on the results of the update from the EnKF.
             new_individual_list = [
