@@ -476,7 +476,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         plt.close()
         if self.input_type == 'greyvalue':
             rates = spike_generator.greyvalue(image,
-                                              min_rate=1, max_rate=100)
+                                              min_rate=1, max_rate=10)
             generator_stats = [{'rate': w} for w in rates]
             nest.SetStatus(self.pixel_rate_generators, generator_stats)
         elif self.input_type == 'greyvalue_sequential':
