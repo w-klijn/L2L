@@ -47,7 +47,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         # SIMULATION PARAMETERS
         self.input_type = 'greyvalue'
         # simulated time (ms)
-        self.t_sim = 1000.  # 60000.0
+        self.t_sim = 4000.  # 60000.0
         self.warm_up_time = 4000.
         # simulation step (ms).
         self.dt = 0.1
@@ -617,6 +617,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         target = np.zeros(10)
         target[target_label] = 1.0
         fitness = ((target - model_out) ** 2).sum()
+        print(fitness)
         return dict(fitness=fitness, model_out=model_out)
 
     def _run_simulation(self, j, train_px_one, record_mean=False):
