@@ -267,9 +267,10 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.Connect(self.pixel_rate_generators, self.nodes_in, "one_to_one",
                      syn_spec=self.syn_dict_e)
         # Input neurons to bulk
-        nest.Connect(self.nodes_in, self.nodes_e[0:len(self.nodes_in)],
-                     "one_to_one", syn_spec=self.syn_dict_e)
-        nest.Connect(self.nodes_in, self.nodes_i, syn_spec=self.syn_dict_i)
+        nest.Connect(self.nodes_in, self.nodes_e,
+                     "all_to_all", syn_spec=self.syn_dict_e)
+        nest.Connect(self.nodes_in, self.nodes_i, 
+                     "all_to_all", syn_spec=self.syn_dict_i)
 
     def connect_greyvalue_sequential_input(self):
         # FIXME changed commented out
@@ -365,7 +366,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.Connect(self.nodes_e, self.nodes_i, conn_dict,
                      syn_spec=self.syn_dict_e)
         conn_dict = {'rule': 'fixed_outdegree',
-                     'outdegree': int(0.12 * self.number_bulk_exc_neurons)}
+                     'outdegree': int(0.22 * self.number_bulk_exc_neurons)}
         nest.Connect(self.nodes_i, self.nodes_e, conn_dict,
                      syn_spec=self.syn_dict_i)
         conn_dict = {'rule': 'fixed_outdegree',
@@ -376,9 +377,9 @@ class StructuralPlasticityOptimizee(Optimizee):
     def connect_bulk_to_out(self):
         # Bulk to out
         conn_dict_e = {'rule': 'fixed_indegree',
-                       'indegree': int(0.3 * self.number_bulk_exc_neurons)}
+                       'indegree': int(0.03 * self.number_bulk_exc_neurons)} #0.3 * self.number_out_exc_neurons
         conn_dict_i = {'rule': 'fixed_indegree',
-                       'indegree': int(0.2 * self.number_bulk_exc_neurons)}
+                       'indegree': int(0.02 * self.number_bulk_inh_neurons)} #0.2 * self.number_out_exc_neurons
         for j in range(10):
             nest.Connect(self.nodes_e, self.nodes_out_e[j], conn_dict_e,
                          syn_spec=self.syn_dict_e)
