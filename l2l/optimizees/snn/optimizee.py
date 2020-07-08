@@ -56,8 +56,10 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.number_bulk_exc_neurons = 800
         self.number_bulk_inh_neurons = 400
         self.number_out_exc_neurons = 10
-        self.number_out_inh_neurons = 10
+        self.number_out_inh_neurons = 4
         self.number_output_clusters = 10
+        self.number_recorded_bulk_exc = 80
+        self.number_recorded_bulk_inh = 40
 
         # Structural_plasticity properties
         self.update_interval = 0
@@ -85,6 +87,10 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.nodes_out_e = None
         self.nodes_out_i = None
         self.input_spike_detector = None
+        self.bulksde = None
+        self.bulksdi = None
+        self.outputsde = None
+        self.outputsdi = None
         self.pixel_rate_generators = None
         self.noise = None
 
@@ -108,6 +114,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.psc_c = 585.0
         self.psc_out = 100.0
         self.psc_ext = 6.2
+
+        self.record_spiking_fr = True
 
         # synaptic dictionary with uniform weight distribution
         self.syn_dict_e = {"model": "random_synapse",
@@ -240,6 +248,19 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.input_spike_detector = nest.Create("spike_detector",
                                                 params={"withgid": True,
                                                         "withtime": True})
+        if(self.record_fr):
+            self.bulksde = nest.Create("spike_detector",
+                                                params={"withgid": True,
+                                                        "withtime": True})
+            self.bulksdi = nest.Create("spike_detector",
+                                                params={"withgid": True,
+                                                        "withtime": True})
+            self.outputsde = nest.Create("spike_detector", 10,
+                                                params={"withgid": True,
+                                                        "withtime": True})
+            self.outputsdi = nest.Create("spike_detector", 10,
+                                                params={"withgid": True,
+                                                        "withtime": True})
 
     def create_pixel_rate_generator(self, input_type):
         if input_type == 'greyvalue':
@@ -260,6 +281,15 @@ class StructuralPlasticityOptimizee(Optimizee):
 
     def connect_input_spike_detectors(self):
         nest.Connect(self.nodes_in, self.input_spike_detector)
+
+    def connect_all_spike_detectors(self):
+        #BULK
+        nest.Connect(self.nodes_bulk_e[0:self.number_recorded_bulk_exc], self.bulksde)
+        nest.Connect(self.nodes_bulk_i[0:self.number_recorded_bulk_inh], self.bulksdi)
+        #OUTPUT
+        for i in range(10):
+            nest.Connect(self.nodes_out_e[i], self.outputsde[i])
+            nest.Connect(self.nodes_out_i[i], self.outputsdi[i])
 
     def connect_greyvalue_input(self):
         # Poisson to input neurons
@@ -417,6 +447,19 @@ class StructuralPlasticityOptimizee(Optimizee):
             nest.Connect(self.nodes_out_i[ii], self.nodes_out_i[ii],
                          conn_dict_i, syn_spec=syn_dict_i)
 
+    def clear_spiking_events(self):
+        for i in range(10):
+            nest.SetStatus(outputsde[i], "n_events", 0)
+            nest.SetStatus(outputsdi[i], "n_events", 0)
+
+    def record_fr(self, record_mean=False):
+        self.mean_ca_e.append(nest.GetStatus(bulksde, "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
+        self.mean_ca_i.append(nest.GetStatus(bulksdi, "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
+        if(record_mean):
+            for i in range(10):
+                self.mean_ca_e_out[ii].append(nest.GetStatus(outputsde[i], "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
+                self.mean_ca_i_out[ii].append(nest.GetStatus(outputsdi[i], "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons)) 
+
     def record_ca(self, record_mean=False):
         ca_e = nest.GetStatus(self.nodes_e, 'Ca'),  # Calcium concentration
         self.mean_ca_e.append(np.mean(ca_e))
@@ -513,6 +556,8 @@ class StructuralPlasticityOptimizee(Optimizee):
     def net_simulate(self):
         print("Starting simulation")
         nest.Simulate(self.warm_up_time)
+        if(self.record_spiking_fr):
+            self.clear_spiking_events()
         sim_steps = np.arange(0, self.t_sim, self.record_interval)
         for i, step in enumerate(sim_steps):
             nest.Simulate(self.record_interval)
@@ -630,7 +675,10 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.net_simulate()
         # record ca
         # sim.clear_records()
-        self.record_ca(record_mean=record_mean)
+        if(self.record_spiking_fr):
+            self.record_fr(record_mean=record_mean)
+        else:
+            self.record_ca(record_mean=record_mean)
         print("One was shown")
 
 
