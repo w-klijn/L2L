@@ -448,6 +448,8 @@ class StructuralPlasticityOptimizee(Optimizee):
                          conn_dict_i, syn_spec=syn_dict_i)
 
     def clear_spiking_events(self):
+        nest.SetStatus(bulksde, "n_events", 0)
+        nest.SetStatus(bulksdi, "n_events", 0)
         for i in range(10):
             nest.SetStatus(outputsde[i], "n_events", 0)
             nest.SetStatus(outputsdi[i], "n_events", 0)
