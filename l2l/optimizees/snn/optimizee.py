@@ -47,8 +47,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         # SIMULATION PARAMETERS
         self.input_type = 'greyvalue'
         # simulated time (ms)
-        self.t_sim = 4000.  # 60000.0
-        self.warm_up_time = 4000.
+        self.t_sim = 1000.  # 60000.0
+        self.warm_up_time = 1000.
         # simulation step (ms).
         self.dt = 0.1
 
@@ -250,17 +250,17 @@ class StructuralPlasticityOptimizee(Optimizee):
                                                         "withtime": True})
         if(self.record_fr):
             self.bulksde = nest.Create("spike_detector",
-                                                params={"withgid": True,
-                                                        "withtime": True})
+                                       params={"withgid": True,
+                                               "withtime": True})
             self.bulksdi = nest.Create("spike_detector",
-                                                params={"withgid": True,
-                                                        "withtime": True})
+                                       params={"withgid": True,
+                                               "withtime": True})
             self.outputsde = nest.Create("spike_detector", 10,
-                                                params={"withgid": True,
-                                                        "withtime": True})
+                                         params={"withgid": True,
+                                                 "withtime": True})
             self.outputsdi = nest.Create("spike_detector", 10,
-                                                params={"withgid": True,
-                                                        "withtime": True})
+                                         params={"withgid": True,
+                                                 "withtime": True})
 
     def create_pixel_rate_generator(self, input_type):
         if input_type == 'greyvalue':
@@ -283,10 +283,12 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.Connect(self.nodes_in, self.input_spike_detector)
 
     def connect_all_spike_detectors(self):
-        #BULK
-        nest.Connect(self.nodes_bulk_e[0:self.number_recorded_bulk_exc], self.bulksde)
-        nest.Connect(self.nodes_bulk_i[0:self.number_recorded_bulk_inh], self.bulksdi)
-        #OUTPUT
+        # BULK
+        nest.Connect(
+            self.nodes_bulk_e[0:self.number_recorded_bulk_exc], self.bulksde)
+        nest.Connect(
+            self.nodes_bulk_i[0:self.number_recorded_bulk_inh], self.bulksdi)
+        # OUTPUT
         for i in range(10):
             nest.Connect(self.nodes_out_e[i], self.outputsde[i])
             nest.Connect(self.nodes_out_i[i], self.outputsdi[i])
@@ -299,7 +301,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         # Input neurons to bulk
         nest.Connect(self.nodes_in, self.nodes_e,
                      "all_to_all", syn_spec=self.syn_dict_e)
-        nest.Connect(self.nodes_in, self.nodes_i, 
+        nest.Connect(self.nodes_in, self.nodes_i,
                      "all_to_all", syn_spec=self.syn_dict_i)
 
     def connect_greyvalue_sequential_input(self):
@@ -407,9 +409,9 @@ class StructuralPlasticityOptimizee(Optimizee):
     def connect_bulk_to_out(self):
         # Bulk to out
         conn_dict_e = {'rule': 'fixed_indegree',
-                       'indegree': int(0.03 * self.number_bulk_exc_neurons)} #0.3 * self.number_out_exc_neurons
+                       'indegree': int(0.03 * self.number_bulk_exc_neurons)}  # 0.3 * self.number_out_exc_neurons
         conn_dict_i = {'rule': 'fixed_indegree',
-                       'indegree': int(0.02 * self.number_bulk_inh_neurons)} #0.2 * self.number_out_exc_neurons
+                       'indegree': int(0.02 * self.number_bulk_inh_neurons)}  # 0.2 * self.number_out_exc_neurons
         for j in range(10):
             nest.Connect(self.nodes_e, self.nodes_out_e[j], conn_dict_e,
                          syn_spec=self.syn_dict_e)
@@ -448,19 +450,24 @@ class StructuralPlasticityOptimizee(Optimizee):
                          conn_dict_i, syn_spec=syn_dict_i)
 
     def clear_spiking_events(self):
-        nest.SetStatus(bulksde, "n_events", 0)
-        nest.SetStatus(bulksdi, "n_events", 0)
+        nest.SetStatus(self.bulksde, "n_events", 0)
+        nest.SetStatus(self.bulksdi, "n_events", 0)
         for i in range(10):
-            nest.SetStatus(outputsde[i], "n_events", 0)
-            nest.SetStatus(outputsdi[i], "n_events", 0)
+            print('type of outputsde: ', type(self.outputsde[i]))
+            nest.SetStatus(self.outputsde[i], "n_events", 0)
+            nest.SetStatus(self.outputsdi[i], "n_events", 0)
 
     def record_fr(self, record_mean=False):
-        self.mean_ca_e.append(nest.GetStatus(bulksde, "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
-        self.mean_ca_i.append(nest.GetStatus(bulksdi, "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
+        self.mean_ca_e.append(nest.GetStatus(bulksde, "n_events")[
+                              0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
+        self.mean_ca_i.append(nest.GetStatus(bulksdi, "n_events")[
+                              0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
         if(record_mean):
             for i in range(10):
-                self.mean_ca_e_out[ii].append(nest.GetStatus(outputsde[i], "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
-                self.mean_ca_i_out[ii].append(nest.GetStatus(outputsdi[i], "n_events")[0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons)) 
+                self.mean_ca_e_out[ii].append(nest.GetStatus(self.outputsde[i], "n_events")[
+                                              0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
+                self.mean_ca_i_out[ii].append(nest.GetStatus(self.outputsdi[i], "n_events")[
+                                              0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
 
     def record_ca(self, record_mean=False):
         ca_e = nest.GetStatus(self.nodes_e, 'Ca'),  # Calcium concentration
@@ -704,7 +711,7 @@ def replace_weights(gen_idx, ind_idx, weights, path='.', typ='e'):
     # Read the connections, i.e. sources and targets
     conns = pd.read_csv(
         os.path.join(path, '{}_connections_g{}_i{}.csv'.format(typ, 0, 0)))
-        # weights = traj.individual.connection_weights
+    # weights = traj.individual.connection_weights
 
     sources = conns['source'].values
     targets = conns['target'].values
