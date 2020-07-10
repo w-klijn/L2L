@@ -25,7 +25,6 @@ import matplotlib.pyplot as plt
 import nest
 import numpy as np
 import os
-import glob
 import pandas as pd
 from scipy.special import softmax
 
@@ -47,6 +46,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         # SIMULATION PARAMETERS
         self.input_type = 'greyvalue'
         # simulated time (ms)
+        # TODO: set back to 4000. or 6000.
         self.t_sim = 1000.  # 60000.0
         self.warm_up_time = 1000.
         # simulation step (ms).
@@ -453,21 +453,20 @@ class StructuralPlasticityOptimizee(Optimizee):
         nest.SetStatus(self.bulksde, "n_events", 0)
         nest.SetStatus(self.bulksdi, "n_events", 0)
         for i in range(10):
-            print('type of outputsde: ', type(self.outputsde[i]))
-            nest.SetStatus(self.outputsde[i], "n_events", 0)
-            nest.SetStatus(self.outputsdi[i], "n_events", 0)
+            nest.SetStatus([self.outputsde[i]], "n_events", 0)
+            nest.SetStatus([self.outputsdi[i]], "n_events", 0)
 
     def record_fr(self, record_mean=False):
-        self.mean_ca_e.append(nest.GetStatus(bulksde, "n_events")[
+        self.mean_ca_e.append(nest.GetStatus(self.bulksde, "n_events")[
                               0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
-        self.mean_ca_i.append(nest.GetStatus(bulksdi, "n_events")[
+        self.mean_ca_i.append(nest.GetStatus(self.bulksdi, "n_events")[
                               0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
         if(record_mean):
             for i in range(10):
-                self.mean_ca_e_out[ii].append(nest.GetStatus(self.outputsde[i], "n_events")[
-                                              0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
-                self.mean_ca_i_out[ii].append(nest.GetStatus(self.outputsdi[i], "n_events")[
-                                              0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
+                self.mean_ca_e_out[i].append(nest.GetStatus([self.outputsde[i]], "n_events")[
+                    0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
+                self.mean_ca_i_out[i].append(nest.GetStatus([self.outputsdi[i]], "n_events")[
+                    0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
 
     def record_ca(self, record_mean=False):
         ca_e = nest.GetStatus(self.nodes_e, 'Ca'),  # Calcium concentration
