@@ -292,8 +292,8 @@ class StructuralPlasticityOptimizee(Optimizee):
             self.nodes_i[0:self.number_recorded_bulk_inh], self.bulksdi)
         # OUTPUT
         for i in range(10):
-            nest.Connect(self.nodes_out_e[i], self.outputsde[i])
-            nest.Connect(self.nodes_out_i[i], self.outputsdi[i])
+            nest.Connect(self.nodes_out_e[i], [self.outputsde[i]])
+            nest.Connect(self.nodes_out_i[i], [self.outputsdi[i]])
 
     def connect_greyvalue_input(self):
         # Poisson to input neurons
@@ -529,7 +529,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         plt.close()
         if self.input_type == 'greyvalue':
             rates = spike_generator.greyvalue(image,
-                                              min_rate=1, max_rate=10)
+                                              min_rate=1, max_rate=100)
             generator_stats = [{'rate': w} for w in rates]
             nest.SetStatus(self.pixel_rate_generators, generator_stats)
         elif self.input_type == 'greyvalue_sequential':
