@@ -460,9 +460,9 @@ class StructuralPlasticityOptimizee(Optimizee):
 
     def record_fr(self, record_mean=False):
         self.mean_ca_e.append(nest.GetStatus(self.bulksde, "n_events")[
-                              0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
+                              0] * 1000.0 / (self.t_sim*self.number_recorded_bulk_exc))
         self.mean_ca_i.append(nest.GetStatus(self.bulksdi, "n_events")[
-                              0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
+                              0] * 1000.0 / (self.t_sim*self.number_recorded_bulk_inh))
         if(record_mean):
             for i in range(10):
                 self.mean_ca_e_out[i].append(nest.GetStatus([self.outputsde[i]], "n_events")[
@@ -641,6 +641,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.prepare_network()
         self.connect_external_input(self.number_input_neurons)
         self.connect_input_spike_detectors()
+        if(self.record_spiking_fr):
+            self.connect_all_spike_detectors()
         self.gen_idx = traj.individual.generation
         self.ind_idx = traj.individual.ind_idx
         print('Iteration {}'.format(self.gen_idx))
