@@ -460,15 +460,15 @@ class StructuralPlasticityOptimizee(Optimizee):
 
     def record_fr(self, record_mean=False):
         self.mean_ca_e.append(nest.GetStatus(self.bulksde, "n_events")[
-                              0] * 1000.0 / (self.t_sim*self.number_recorded_bulk_exc))
+                              0] * 1000.0 / (self.record_interval*self.number_recorded_bulk_exc))
         self.mean_ca_i.append(nest.GetStatus(self.bulksdi, "n_events")[
-                              0] * 1000.0 / (self.t_sim*self.number_recorded_bulk_inh))
+                              0] * 1000.0 / (self.record_interval*self.number_recorded_bulk_inh))
         if(record_mean):
             for i in range(10):
                 self.mean_ca_e_out[i].append(nest.GetStatus([self.outputsde[i]], "n_events")[
-                    0] * 1000.0 / (self.t_sim*self.number_out_exc_neurons))
+                    0] * 1000.0 / (self.record_interval*self.number_out_exc_neurons))
                 self.mean_ca_i_out[i].append(nest.GetStatus([self.outputsdi[i]], "n_events")[
-                    0] * 1000.0 / (self.t_sim*self.number_out_inh_neurons))
+                    0] * 1000.0 / (self.record_interval*self.number_out_inh_neurons))
 
     def record_ca(self, record_mean=False):
         ca_e = nest.GetStatus(self.nodes_e, 'Ca'),  # Calcium concentration
@@ -575,6 +575,7 @@ class StructuralPlasticityOptimizee(Optimizee):
                 print("Progress: " + str(i / 2) + "%")
             if(self.record_spiking_fr):
                 self.record_fr()
+                self.clear_spiking_events()
             else:
                 self.record_ca()
             self.record_connectivity()
