@@ -67,7 +67,7 @@ class StructuralPlasticityOptimizee(Optimizee):
         self.update_interval = 0
         self.record_interval = 100.
         # rate of background Poisson input
-        self.bg_rate = 1000.0
+        self.bg_rate = 1600.0
         self.neuron_model = 'iaf_psc_alpha'
 
         # SPECIFY NEURON PARAMETERS
@@ -573,7 +573,10 @@ class StructuralPlasticityOptimizee(Optimizee):
             nest.Simulate(self.record_interval)
             if i % 20 == 0:
                 print("Progress: " + str(i / 2) + "%")
-            self.record_ca()
+            if(self.record_spiking_fr):
+                self.record_fr()
+            else:
+                self.record_ca()
             self.record_connectivity()
         print("Simulation loop finished successfully")
 
