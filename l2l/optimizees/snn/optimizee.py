@@ -84,8 +84,8 @@ class StructuralPlasticityOptimizee(Optimizee):
         #                     }
 
         self.nodes_in = None
-        self.nodes_bulk_e = None
-        self.nodes_bulk_i = None
+        self.nodes_e = None
+        self.nodes_i = None
         self.nodes_out_e = None
         self.nodes_out_i = None
         self.input_spike_detector = None
@@ -287,9 +287,9 @@ class StructuralPlasticityOptimizee(Optimizee):
     def connect_all_spike_detectors(self):
         # BULK
         nest.Connect(
-            self.nodes_bulk_e[0:self.number_recorded_bulk_exc], self.bulksde)
+            self.nodes_e[0:self.number_recorded_bulk_exc], self.bulksde)
         nest.Connect(
-            self.nodes_bulk_i[0:self.number_recorded_bulk_inh], self.bulksdi)
+            self.nodes_i[0:self.number_recorded_bulk_inh], self.bulksdi)
         # OUTPUT
         for i in range(10):
             nest.Connect(self.nodes_out_e[i], self.outputsde[i])
