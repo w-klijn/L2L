@@ -1,3 +1,16 @@
+
+from collections import OrderedDict, namedtuple
+from l2l.optimizees.optimizee import Optimizee
+from . import spike_generator, visualize
+from . import growth_curves
+from scipy.special import softmax
+import pandas as pd
+import os
+import numpy as np
+import nest
+import matplotlib.pyplot as plt
+import pickle
+
 # -*- coding: utf-8 -*-
 #
 #
@@ -20,18 +33,7 @@
 
 
 # IMPORT LIBS
-import pickle
-import matplotlib.pyplot as plt
-import nest
-import numpy as np
-import os
-import pandas as pd
-from scipy.special import softmax
 
-from . import growth_curves
-from . import spike_generator, visualize
-from l2l.optimizees.optimizee import Optimizee
-from collections import OrderedDict, namedtuple
 
 StructuralPlasticityOptimizeeParameters = namedtuple(
     'StructuralPlasticityOptimizeeParameters', ['seed', 'path'])

@@ -202,6 +202,7 @@ class EnsembleKalmanFilter(Optimizer):
                  gamma=gamma)
         # These are all the updated weights for each ensemble
         results = scaler.inverse_transform(enkf.ensemble)
+        self.plot_distribution(weights=results, gen=traj.generation, mean=True)
 
         generation_name = 'generation_{}'.format(traj.generation)
         traj.results.generation_params.f_add_result_group(generation_name)
@@ -284,6 +285,16 @@ class EnsembleKalmanFilter(Optimizer):
                 # only if subs is the longest individual
                 new_inds.append(inds)
         return new_inds
+
+    @staticmethod
+    def plot_distribution(weights, gen, mean=True):
+        """ Plots the weights as a histogram """
+        if mean:
+            plt.hist(weights.mean(0))
+        else:
+            plt.hist(weights)
+        plt.savefig('weight_distributions_gen{}.eps'.format(gen), format='eps')
+        plt.close()
 
     @staticmethod
     def _create_individual_distribution(random_state, weights,
