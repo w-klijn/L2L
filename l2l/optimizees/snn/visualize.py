@@ -39,8 +39,10 @@ def plot_data(idx, mean_ca_e, mean_ca_i, total_connections_e,
 
 def plot_data_out(idx, mean_ca_e_out, mean_ca_i_out):
     fig, axes = plt.subplots(5,2, sharex=True, sharey=True)
+    print(mean_ca_e_out)
     for i in range(5):
         for j in range(2):
+            #FIXME iteration is only up to 5
             axes[i][j].plot(mean_ca_e_out[i], 'r',
                             label='Ex.', linewidth=2.0)
             axes[i][j].plot(mean_ca_i_out[i], 'b',
