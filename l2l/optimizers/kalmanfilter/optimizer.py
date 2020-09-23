@@ -134,7 +134,7 @@ class EnsembleKalmanFilter(Optimizer):
         self.get_external_input()
 
         for e in self.eval_pop:
-            e["targets"] = self.target_label
+            e["targets"] = self.target_lbl
             e["train_px_one"] = self.train_px_one
         self.g = 0
 
@@ -184,7 +184,8 @@ class EnsembleKalmanFilter(Optimizer):
                    range(ensemble_size)]
         self.current_fitness = np.min(fitness)
 
-        weights = self._sample_from_individual(weights, fitness, bins=10000)
+        # TODO make sampling optional
+        # weights = self._sample_from_individual(weights, fitness, bins=10000)
         ens, scaler = self._scale_weights(weights, normalize=True,
                                           method=pp.MinMaxScaler)
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
@@ -216,7 +217,7 @@ class EnsembleKalmanFilter(Optimizer):
 
         # Produce the new generation of individuals
         if self.g < len(
-                self.target_lbl) or traj.stop_criterion >= self.current_fitness \
+                self.target_lbl) or traj.stop_criterion <= self.current_fitness \
                 or self.g < traj.n_iteration:
             # Create new individual based on the results of the update from the EnKF.
             new_individual_list = [
@@ -308,7 +309,7 @@ class EnsembleKalmanFilter(Optimizer):
     def _new_individuals(self, traj, fitnesses, individuals, ensemble_size):
         """
         Sample new individuals by first ranking and then sampling from a
-        gaussian distribution. The
+        gaussian distribution.
         """
         ranking_idx = list(reversed(np.argsort(fitnesses)))
         best_fitness = fitnesses[ranking_idx][0]

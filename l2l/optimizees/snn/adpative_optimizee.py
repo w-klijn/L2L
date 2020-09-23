@@ -1,6 +1,7 @@
 from collections import OrderedDict, namedtuple
 from l2l.optimizees.optimizee import Optimizee
-from . import spike_generator, visualize
+from l2l.optimizees.snn import spike_generator, visualize
+from scipy.special import softmax
 
 import json
 import glob
@@ -11,9 +12,9 @@ import pandas as pd
 import pickle
 
 AdaptiveOptimizeeParameters = namedtuple(
-    'StructuralPlasticityOptimizeeParameters', ['seed', 'path',
-                                                'record_spiking_firingrate',
-                                                'save_plot'])
+    'AdaptiveOptimizeeParameters', ['seed', 'path',
+                                    'record_spiking_firingrate',
+                                    'save_plot'])
 
 
 class AdaptiveOptimizee(Optimizee):
@@ -23,7 +24,7 @@ class AdaptiveOptimizee(Optimizee):
         seed = np.uint32(self.parameters.seed)
 
         self.random_state = np.random.RandomState(seed=seed)
-        with open('config.json') as jsonfile:
+        with open('/home/yegenoglu/Documents/toolbox/L2L/l2l/optimizees/snn/config.json') as jsonfile:
             self.config = json.load(jsonfile)
         seed = np.uint32(self.config['seed'])
         self.random_state = np.random.RandomState(seed=seed)
@@ -32,8 +33,8 @@ class AdaptiveOptimizee(Optimizee):
         # Resolution, simulation steps in [ms]
         self.dt = self.config['dt']
         self.neuron_model = self.config['neuron_model']
-        self.gen_idx = 0
-        self.ind_idx = 0
+        self.gen_idx = traj.individual.generation
+        self.ind_idx = traj.individual.ind_idx
 
         self.n_input_neurons = self.config['n_input']
         self.n_bulk_ex_neurons = self.config['n_bulk_ex']
@@ -65,6 +66,24 @@ class AdaptiveOptimizee(Optimizee):
         self.target_labels = []
         self.random_ids = []
 
+    def connect_network(self):
+        self.prepare_network()
+        # Do the connections
+        self.connect_external_input(self.n_input_neurons)
+        self.connect_input_spike_detectors()
+        self.connect_internal_bulk()
+
+        # save connection structure
+        conns_e = nest.GetConnections(source=self._get_net_structure('e'))
+        self.save_connections(conns_e, self.gen_idx, self.ind_idx,
+                              path=self.parameters.path,
+                              typ='e')
+        conns_i = nest.GetConnections(source=self._get_net_structure('i'))
+        self.save_connections(conns_i, self.gen_idx, self.ind_idx,
+                              path=self.parameters.path,
+                              typ='i')
+        return len(conns_e), len(conns_i)
+
     def prepare_network(self):
         """  Helper functions to create the network """
         self.reset_kernel()
@@ -80,17 +99,6 @@ class AdaptiveOptimizee(Optimizee):
         self.connect_all_spike_detectors()
         self.connect_internal_bulk()
         self.connect_noise_bulk()
-
-        # save connection structure
-        conns_e = nest.GetConnections(source=self._get_net_structure('e'))
-        self.save_connections(conns_e, self.gen_idx, self.ind_idx,
-                              path=self.parameters.path,
-                              typ='e')
-        conns_i = nest.GetConnections(source=self._get_net_structure('i'))
-        self.save_connections(conns_i, self.gen_idx, self.ind_idx,
-                              path=self.parameters.path,
-                              typ='i')
-        return len(conns_e), len(conns_i)
 
     def _get_net_structure(self, typ):
         if typ == 'e':
@@ -324,7 +332,9 @@ class AdaptiveOptimizee(Optimizee):
         # leave the target labels as strings, which will be easier to save in
         # a dictionary later on
         label = target[random_id]
-        self.target_labels.extend(label)
+        if isinstance(label, str):
+            label = int(label)
+        self.target_labels.append(label)
         image = train_px[random_id]
         # Save image for reference
         visualize.plot_image(image=image, random_id=random_id,
@@ -410,6 +420,14 @@ class AdaptiveOptimizee(Optimizee):
                 self.record_ca()
             self.record_connectivity()
         print("Simulation loop finished successfully")
+        model_out = softmax(
+            [self.mean_ca_e[j][-1] for j in range(10)])
+        label = self.target_labels[-1]
+        target = np.zeros(10)
+        target[label] = 1.0
+        fitness = ((target - model_out) ** 2).sum()
+        print(fitness)
+        return dict(fitness=fitness, model_out=model_out)
 
     @staticmethod
     def replace_weights(gen_idx, ind_idx, weights, path='.', typ='e'):
