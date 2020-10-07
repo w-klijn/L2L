@@ -115,50 +115,34 @@ class EnsembleKalmanFilter(Optimizer):
         # MNIST DATA HANDLING
         self.target_label = ['1']
         self.other_label = ['0', '2', '3', '4', '5', '6', '7', '8', '9']
-        self.target_px = None
-        self.target_lbl = None
-        self.other_px = None
-        self.other_lbl = None
-        self.test_px = None
-        self.test_lbl = None
-        self.train_px_one = None
-        self.train_lb_one = None
-        self.test_px_one = None
-        self.test_lb_one = None
-        self.train_px_other = None
-        self.train_lb_other = None
-        self.test_px_other = None
-        self.test_lb_other = None
+        self.train_set = None
+        self.train_labels = None
+        self.other_set = None
+        self.other_labels = None
+        self.test_set = None
+        self.test_labels = None
+        self.test_set_other = None
+        self.test_labels_other = None
         # get the targets
         self.get_mnist_data()
-        self.get_external_input()
 
         for e in self.eval_pop:
-            e["targets"] = self.target_lbl
-            e["train_px_one"] = self.train_px_one
+            e["targets"] = self.train_labels
+            e["train_set"] = self.train_set
         self.g = 0
 
         self._expand_trajectory(traj)
 
     def get_mnist_data(self):
-        self.target_px, self.target_lbl, self.test_px, self.test_lbl = \
+        self.train_set, self.train_labels, self.test_set, self.test_labels = \
             data.fetch(path='./mnist784_dat/',
                        labels=self.target_label)
-        self.other_px, self.other_lbl, self.test_px, self.test_lbl = \
-            data.fetch(path='./mnist784_dat/',
-                       labels=self.other_label)
-
-    def get_external_input(self):
-        self.train_px_one, self.train_lb_one, self.test_px_one, self.test_lb_one = \
-            data.fetch(path='./mnist784_dat/', labels=['1'])
-        self.train_px_other, self.train_lb_other, self.test_px_other, self.test_lb_other = \
-            data.fetch(path='./mnist784_dat/',
-                       labels=['0', '2', '3', '4', '5', '6', '7', '8',
-                               '9'])
+        self.other_set, self.other_labels, self.test_set_other, self.test_labels_other = data.fetch(
+            path='./mnist784_dat/', labels=self.other_label)
 
     def set_other_external_input(self, iteration):
-        random_id = np.random.randint(low=0, high=len(self.train_px_other))
-        image = self.train_px_other[random_id]
+        random_id = np.random.randint(low=0, high=len(self.other_set))
+        image = self.other_set[random_id]
         # Save other image for reference
         plottable_image = np.reshape(image, (28, 28))
         plt.imshow(plottable_image, cmap='gray_r')
@@ -217,12 +201,12 @@ class EnsembleKalmanFilter(Optimizer):
 
         # Produce the new generation of individuals
         if self.g < len(
-                self.target_lbl) or traj.stop_criterion <= self.current_fitness \
+                self.target_labels) or traj.stop_criterion <= self.current_fitness \
                 or self.g < traj.n_iteration:
             # Create new individual based on the results of the update from the EnKF.
             new_individual_list = [
                 {'weights_e': results[i][:len(individuals[i].weights_e)],
-                 'weights_i': results[i][len(individuals[i].weights_e):],
+                 'weights_i': results[i][len(individuals[i].weights_i):],
                  'train_px_one': self.train_px_one,
                  'targets': self.target_label} for i in
                 range(ensemble_size)]

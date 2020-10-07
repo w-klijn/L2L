@@ -14,5 +14,6 @@
     "psc_ext": 6.2,
     "record_interval": 100.0,
     "warm_up_time": 1000.0,
+    "cooling_time": 2000.0,
     "bg_rate": 1600.0
 }

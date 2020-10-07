@@ -45,6 +45,7 @@ class AdaptiveOptimizee(Optimizee):
         self.bg_rate = self.config['bg_rate']
         self.record_interval = self.config['record_interval']
         self.warm_up_time = self.config['warm_up_time']
+        self.cooling_time = self.config['cooling_time']
 
         self.nodes_in = None
         self.nodes_e = None
@@ -323,8 +324,8 @@ class AdaptiveOptimizee(Optimizee):
         # self.total_connections_i.append(sum(neuron['Bulk_I_Axn']['z_connected']
         #                                     for neuron in syn_elems_i))
 
-    def set_external_input(self, iteration, train_px_one, target):
-        train_px = train_px_one
+    def set_external_input(self, iteration, train_set, target):
+        train_px = train_set
         path = self.parameters.path
         save = self.parameters.save_plot
         random_id = np.random.randint(low=0, high=len(train_px))
@@ -388,9 +389,9 @@ class AdaptiveOptimizee(Optimizee):
         self.ind_idx = traj.individual.ind_idx
         # prepare the connections etc.
         self.prepare_network()
-        train_px = traj.individual.train_px_one
+        train_set = traj.individual.train_set
         target = traj.individual.targets
-        self.set_external_input(iteration=self.gen_idx, train_px_one=train_px,
+        self.set_external_input(iteration=self.gen_idx, train_set=train_set,
                                 target=target)
         self.weights_e = traj.individual.weights_e
         self.weights_i = traj.individual.weights_i
@@ -406,6 +407,8 @@ class AdaptiveOptimizee(Optimizee):
             print('Warm up done')
         if self.parameters.record_spiking_firingrate:
             self.clear_spiking_events()
+        # cooling time, empty simulation
+        nest.Simulate(self.cooling_time)
         # start simulation
         sim_steps = np.arange(0, self.t_sim, self.record_interval)
         for j, step in enumerate(sim_steps):

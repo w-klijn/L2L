@@ -9,14 +9,15 @@ Classifiers = Enum('MLP SVM PCA')
 
 
 class Classifier:
-    def __init__(self, clf, **kwargs):
+    def __init__(self, clf_name, **kwargs):
         """
         Class to provide a classifier
 
-        :param clf: Enum, possible enums are `MLP`, `SVM`, `PCA`
+        :param clf_name: Enum, possible enums are `MLP`, `SVM`, `PCA`
         :param kwargs: key word arguments for the classifiers
         """
-        if clf == Classifiers.MLP:
+        self.clf_name = clf_name
+        if clf_name == Classifiers.MLP:
             self.clf = MLPClassifier(solver='adam',
                                      alpha=1e-5,
                                      hidden_layer_sizes=kwargs.get(
@@ -31,4 +32,14 @@ class Classifier:
             self.clf = PCA(n_components=kwargs.get("n_components", 2),
                            **kwargs)
         else:
-            raise AttributeError('Enum {} not identified'.format(clf))
+            raise AttributeError('Enum {} not identified'.format(clf_name))
+
+    def classify(self, x_train, y_train, x_test, y_test):
+        self.clf.fit(x_train, y_train)
+        score = self.clf.score(x_test, y_test)
+        # get model output (only for mlp and svm)
+        if self.clf_name == Classifiers.PCA:
+            model_output = self.clf.get_precision()
+        else:
+            model_output = self.clf.predict_proba(x_train)
+        return score, model_output
