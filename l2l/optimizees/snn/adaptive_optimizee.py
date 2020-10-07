@@ -33,12 +33,17 @@ class AdaptiveOptimizee(Optimizee):
         # Resolution, simulation steps in [ms]
         self.dt = self.config['dt']
         self.neuron_model = self.config['neuron_model']
+        # Indices per generation and individual
         self.gen_idx = traj.individual.generation
         self.ind_idx = traj.individual.ind_idx
 
+        # Number of neurons per layer
         self.n_input_neurons = self.config['n_input']
         self.n_bulk_ex_neurons = self.config['n_bulk_ex']
         self.n_bulk_in_neurons = self.config['n_bulk_in']
+        self.n_neurons_out_e = self.config['n_out_ex']
+        self.n_neurons_out_i = self.config['n_out_in']
+        self.n_output_clusters = self.config['n_output_clusters']
         self.psc_e = self.config['psc_e']
         self.psc_i = self.config['psc_i']
         self.psc_ext = self.config['psc_ext']
@@ -47,33 +52,50 @@ class AdaptiveOptimizee(Optimizee):
         self.warm_up_time = self.config['warm_up_time']
         self.cooling_time = self.config['cooling_time']
 
+        # Init of nodes
         self.nodes_in = None
         self.nodes_e = None
         self.nodes_i = None
+        self.nodes_out_e = []
+        self.nodes_out_i = []
+        # Init of generators and noise
         self.pixel_rate_generators = None
         self.noise = None
+        # Init of spike detectors
         self.input_spike_detector = None
         self.bulks_detector_ex = None
         self.bulks_detector_in = None
+        self.out_detector_e = None
+        self.out_detector_i = None
         self.rates = None
         self.target_px = None
         self.weights_e = None
         self.weights_i = None
-
+        # Lists for connections
         self.total_connections_e = []
         self.total_connections_i = []
+        self.total_connections_out_e = []
+        self.total_connections_out_i = []
+        # Lists for firing rates
         self.mean_ca_e = []
         self.mean_ca_i = []
+        self.mean_ca_out_e = [[] for _ in range(self.n_output_clusters)]
+        self.mean_ca_out_i = [[] for _ in range(self.n_output_clusters)]
+        # Lists for labels
         self.target_labels = []
         self.random_ids = []
 
     def connect_network(self):
         self.prepare_network()
         # Do the connections
-        self.connect_external_input(self.n_input_neurons)
-        self.connect_input_spike_detectors()
         self.connect_internal_bulk()
-
+        self.connect_external_input()
+        self.connect_spike_detectors()
+        self.connect_internal_bulk()
+        self.connect_noise_bulk()
+        self.connect_internal_out()
+        self.connect_bulk_to_out()
+        self.connect_noise_out()
         # save connection structure
         conns_e = nest.GetConnections(source=self._get_net_structure('e'))
         self.save_connections(conns_e, self.gen_idx, self.ind_idx,
@@ -95,11 +117,6 @@ class AdaptiveOptimizee(Optimizee):
             self.input_type)
         self.noise = nest.Create("poisson_generator")
         nest.PrintNetwork(depth=2)
-        self.connect_external_input(self.n_input_neurons)
-        self.connect_input_spike_detectors()
-        self.connect_all_spike_detectors()
-        self.connect_internal_bulk()
-        self.connect_noise_bulk()
 
     def _get_net_structure(self, typ):
         if typ == 'e':
@@ -119,7 +136,11 @@ class AdaptiveOptimizee(Optimizee):
             self.neuron_model, self.n_input_neurons)
         self.nodes_e = nest.Create(self.neuron_model, self.n_bulk_ex_neurons)
         self.nodes_i = nest.Create(self.neuron_model, self.n_bulk_in_neurons)
-        # TODO add the output cluster
+        for i in range(self.n_output_clusters):
+            self.nodes_out_e.append(nest.Create(
+                self.neuron_model, self.n_neurons_out_e))
+            self.nodes_out_i.append(nest.Create(
+                self.neuron_model, self.n_neurons_out_i))
         # TODO enable commented region
         # nest.SetStatus(
         #     self.nodes_e, {'a': self.params['a'], 'b': self.params['b']})
@@ -143,6 +164,18 @@ class AdaptiveOptimizee(Optimizee):
                                                          "to_file": True,
                                                          "label": "bulk_in",
                                                          "file_extension": "spikes"})
+            self.out_detector_e = nest.Create("spike_detector", self.n_output_clusters,
+                                              params={"withgid": True,
+                                                      "withtime": True,
+                                                      "to_file": True,
+                                                      "label": "out_e",
+                                                      "file_extension": "spikes"})
+            self.out_detector_i = nest.Create("spike_detector", self.n_output_clusters,
+                                              params={"withgid": True,
+                                                      "withtime": True,
+                                                      "to_file": True,
+                                                      "label": "out_i",
+                                                      "file_extension": "spikes"})
 
     def create_pixel_rate_generator(self, input_type):
         if input_type == 'greyvalue':
@@ -183,14 +216,16 @@ class AdaptiveOptimizee(Optimizee):
             self.pixel_rate_generators = nest.Create(
                 "poisson_generator", len(rates))
 
-    def connect_input_spike_detectors(self):
+    def connect_spike_detectors(self):
+        # Input
         nest.Connect(self.nodes_in, self.input_spike_detector)
-
-    def connect_all_spike_detectors(self):
         # BULK
-        # TODO? self.nodes_e[0:self.number_recorded_bulk_exc], self.bulksde)
         nest.Connect(self.nodes_e, self.bulks_detector_ex)
         nest.Connect(self.nodes_i, self.bulks_detector_in)
+        # Out
+        for j in range(self.n_output_clusters):
+            nest.Connect(self.nodes_out_e[j], [self.out_detector_e[j]])
+            nest.Connect(self.nodes_out_i[j], [self.out_detector_i[j]])
 
     def connect_noise_bulk(self):
         poisson_gen = nest.Create("poisson_generator", 1, {'rate': 10000.0}, )
@@ -200,6 +235,16 @@ class AdaptiveOptimizee(Optimizee):
                      syn_spec=syn_dict)
         nest.Connect(poisson_gen, self.nodes_i, "all_to_all",
                      syn_spec=syn_dict_i)
+
+    def connect_noise_out(self):
+        poisson_gen = nest.Create("poisson_generator", 1, {'rate': 10000.0}, )
+        syn_dict = {"model": "static_synapse", "weight": 1}
+        syn_dict_i = {"model": "static_synapse", "weight": 1}
+        for j in range(self.n_output_clusters):
+            nest.Connect(poisson_gen, self.nodes_out_e[j], "all_to_all",
+                         syn_spec=syn_dict)
+            nest.Connect(poisson_gen, self.nodes_out_i[j], "all_to_all",
+                         syn_spec=syn_dict_i)
 
     def connect_greyvalue_input(self):
         """ Connects input to bulk """
@@ -269,7 +314,49 @@ class AdaptiveOptimizee(Optimizee):
         nest.Connect(self.nodes_i, self.nodes_i, conn_dict,
                      syn_spec=syn_dict_i)
 
-    def connect_external_input(self, n_img):
+    def connect_internal_out(self):
+        # Connect out
+        conn_dict = {'rule': 'fixed_indegree', 'indegree': 2}
+        syn_dict = {"model": "random_synapse"}
+        conn_dict_i = {'rule': 'fixed_indegree', 'indegree': 2}
+        syn_dict_i = {"model": "random_synapse"}
+        for ii in range(self.n_output_clusters):
+            nest.Connect(self.nodes_out_e[ii], self.nodes_out_e[ii], conn_dict,
+                         syn_spec=syn_dict)
+            nest.Connect(self.nodes_out_e[ii], self.nodes_out_i[ii], conn_dict,
+                         syn_spec=syn_dict)
+            nest.Connect(self.nodes_out_i[ii], self.nodes_out_e[ii],
+                         conn_dict_i, syn_spec=syn_dict_i)
+            nest.Connect(self.nodes_out_i[ii], self.nodes_out_i[ii],
+                         conn_dict_i, syn_spec=syn_dict_i)
+
+    def connect_bulk_to_out(self):
+        # Bulk to out
+        conn_dict_e = {'rule': 'fixed_indegree',
+                       # 0.3 * self.number_out_exc_neurons
+                       'indegree': int(0.03 * self.n_bulk_ex_neurons)}
+        conn_dict_i = {'rule': 'fixed_indegree',
+                       # 0.2 * self.number_out_exc_neurons
+                       'indegree': int(0.02 * self.n_bulk_in_neurons)}
+        syn_dict_e = {"model": "random_synapse",
+                      'weight': {"distribution": "normal",
+                                 "mu": self.psc_e,
+                                 "sigma": 100.}}
+        syn_dict_i = {"model": "random_synapse_i",
+                      'weight': {"distribution": "normal",
+                                 "mu": self.psc_i,
+                                 "sigma": 100.}}
+        for j in range(self.n_output_clusters):
+            nest.Connect(self.nodes_e, self.nodes_out_e[j], conn_dict_e,
+                         syn_spec=syn_dict_e)
+            nest.Connect(self.nodes_e, self.nodes_out_i[j], conn_dict_i,
+                         syn_spec=syn_dict_i)
+            nest.Connect(self.nodes_i, self.nodes_out_e[j], conn_dict_i,
+                         syn_spec=syn_dict_i)
+            nest.Connect(self.nodes_i, self.nodes_out_i[j], conn_dict_e,
+                         syn_spec=syn_dict_e)
+
+    def connect_external_input(self):
         nest.SetStatus(self.noise, {"rate": self.bg_rate})
         nest.Connect(self.noise, self.nodes_e, 'all_to_all',
                      {'weight': self.psc_ext, 'delay': 1.0})
@@ -286,8 +373,11 @@ class AdaptiveOptimizee(Optimizee):
     def clear_spiking_events(self):
         nest.SetStatus(self.bulks_detector_ex, "n_events", 0)
         nest.SetStatus(self.bulks_detector_in, "n_events", 0)
+        for i in range(self.n_output_clusters):
+            nest.SetStatus([self.out_detector_e[i]], "n_events", 0)
+            nest.SetStatus([self.out_detector_i[i]], "n_events", 0)
 
-    def record_fr(self, indx, gen_idx, save=True):
+    def record_fr(self, indx, gen_idx, record_mean=False, save=True):
         """ Records firing rates """
         n_recorded_bulk_ex = self.n_bulk_ex_neurons
         n_recorded_bulk_in = self.n_bulk_in_neurons
@@ -297,19 +387,37 @@ class AdaptiveOptimizee(Optimizee):
         self.mean_ca_i.append(
             nest.GetStatus(self.bulks_detector_in, "n_events")[
                 0] * 1000.0 / (self.record_interval * n_recorded_bulk_in))
+        if record_mean:
+            for i in range(self.n_output_clusters):
+                self.mean_ca_out_e[i].append(nest.GetStatus([self.out_detector_e[i]], "n_events")[
+                    0] * 1000.0 / (self.record_interval*self.n_neurons_out_e))
+                self.mean_ca_out_i[i].append(nest.GetStatus([self.out_detector_i[i]], "n_events")[
+                    0] * 1000.0 / (self.record_interval*self.n_neurons_out_i))
+        spikes = nest.GetStatus(self.bulks_detector_ex, keys="events")[0]
+        visualize.spike_plot(spikes, "Bulk spikes",
+                             idx=indx, gen_idx=gen_idx, save=save)
         spikes = nest.GetStatus(self.bulks_detector_ex, keys="events")[0]
         visualize.spike_plot(spikes, "Bulk spikes",
                              idx=indx, gen_idx=gen_idx, save=save)
 
-    def record_ca(self):
+    def record_ca(self, record_mean=False):
         ca_e = nest.GetStatus(self.nodes_e, 'Ca'),  # Calcium concentration
         self.mean_ca_e.append(np.mean(ca_e))
         ca_i = nest.GetStatus(self.nodes_i, 'Ca'),  # Calcium concentration
         self.mean_ca_i.append(np.mean(ca_i))
+        if record_mean:
+            for ii in range(self.n_output_clusters):
+                # Calcium concentration
+                ca_e = nest.GetStatus(self.nodes_out_e[ii], 'Ca'),
+                self.mean_ca_out_e[ii].append(np.mean(ca_e))
+                ca_i = nest.GetStatus(self.nodes_out_i[ii], 'Ca'),
+                self.mean_ca_out_i[ii].append(np.mean(ca_i))
 
     def clear_records(self):
         self.mean_ca_i = []
         self.mean_ca_e = []
+        self.mean_ca_out_e = [[] for _ in range(self.n_output_clusters)]
+        self.mean_ca_out_i = [[] for _ in range(self.n_output_clusters)]
         # try:
         #     nest.SetStatus(self.input_spike_detector, {"n_events": 0})
         # except AttributeError as e:

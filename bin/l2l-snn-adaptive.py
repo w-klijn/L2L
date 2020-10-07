@@ -4,7 +4,7 @@ import os
 from l2l.utils.environment import Environment
 
 from l2l.logging_tools import create_shared_logger_data, configure_loggers
-from l2l.optimizees.snn.adpative_optimizee import AdaptiveOptimizee, \
+from l2l.optimizees.snn.adaptive_optimizee import AdaptiveOptimizee, \
     AdaptiveOptimizeeParameters
 from l2l.optimizers.kalmanfilter import EnsembleKalmanFilter,\
     EnsembleKalmanFilterParameters
