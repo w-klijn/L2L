@@ -99,11 +99,11 @@ class AdaptiveOptimizee(Optimizee):
         self.connect_noise_out()
         # save connection structure
         conns_e = nest.GetConnections(source=self._get_net_structure('e'))
-        self.save_connections(conns_e, self.gen_idx, self.ind_idx,
+        self.save_connections(conns_e,
                               path=self.parameters.path,
                               typ='e')
         conns_i = nest.GetConnections(source=self._get_net_structure('i'))
-        self.save_connections(conns_i, self.gen_idx, self.ind_idx,
+        self.save_connections(conns_i,
                               path=self.parameters.path,
                               typ='i')
         return len(conns_e), len(conns_i)
@@ -510,9 +510,9 @@ class AdaptiveOptimizee(Optimizee):
                                 target=target)
         self.weights_e = traj.individual.weights_e
         self.weights_i = traj.individual.weights_i
-        self.replace_weights(self.gen_idx, self.ind_idx, self.weights_e,
+        self.replace_weights(self.weights_e,
                              self.parameters.path, typ='e')
-        self.replace_weights(self.gen_idx, self.ind_idx, self.weights_i,
+        self.replace_weights(self.weights_i,
                              self.parameters.path, typ='i')
         # Warm up simulation
         print("Starting simulation")
@@ -549,12 +549,10 @@ class AdaptiveOptimizee(Optimizee):
         return dict(fitness=fitness, model_out=model_out)
 
     @staticmethod
-    def replace_weights(gen_idx, ind_idx, weights, path='.', typ='e'):
+    def replace_weights(weights, path='.', typ='e'):
         # Read the connections, i.e. sources and targets
         conns = pd.read_csv(
-            os.path.join(path, '{}_connections_g{}_i{}.csv'.format(typ,
-                                                                   gen_idx,
-                                                                   ind_idx)))
+            os.path.join(path, '{}_connections.csv'.format(typ)))
         # weights = traj.individual.connection_weights
 
         sources = conns['source'].values
@@ -567,7 +565,7 @@ class AdaptiveOptimizee(Optimizee):
                          conn_spec='one_to_one')
 
     @staticmethod
-    def save_connections(conn, gen_idx, ind_idx, path='.', typ='e'):
+    def save_connections(conn, path='.', typ='e'):
         status = nest.GetStatus(conn)
         d = OrderedDict({'source': [], 'target': []})
         for elem in status:
@@ -577,12 +575,10 @@ class AdaptiveOptimizee(Optimizee):
         df = pd.DataFrame(d)
         df.to_pickle(
             os.path.join(path,
-                         '{}_connections_g{}_i{}.pkl'.format(typ, gen_idx,
-                                                             ind_idx)))
+                         '{}_connections.pkl'.format(typ)))
         df.to_csv(
             os.path.join(path,
-                         '{}_connections_g{}_i{}.csv'.format(typ, gen_idx,
-                                                             ind_idx)))
+                         '{}_connections.csv'.format(typ)))
 
     def checkpoint(self, ids):
         # Input connections
