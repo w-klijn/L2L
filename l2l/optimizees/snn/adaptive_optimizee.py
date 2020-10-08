@@ -24,7 +24,8 @@ class AdaptiveOptimizee(Optimizee):
         seed = np.uint32(self.parameters.seed)
 
         self.random_state = np.random.RandomState(seed=seed)
-        with open('/home/yegenoglu/Documents/toolbox/L2L/l2l/optimizees/snn/config.json') as jsonfile:
+        with open(
+                '/home/yegenoglu/Documents/toolbox/L2L/l2l/optimizees/snn/config.json') as jsonfile:
             self.config = json.load(jsonfile)
         seed = np.uint32(self.config['seed'])
         self.random_state = np.random.RandomState(seed=seed)
@@ -164,13 +165,15 @@ class AdaptiveOptimizee(Optimizee):
                                                          "to_file": True,
                                                          "label": "bulk_in",
                                                          "file_extension": "spikes"})
-            self.out_detector_e = nest.Create("spike_detector", self.n_output_clusters,
+            self.out_detector_e = nest.Create("spike_detector",
+                                              self.n_output_clusters,
                                               params={"withgid": True,
                                                       "withtime": True,
                                                       "to_file": True,
                                                       "label": "out_e",
                                                       "file_extension": "spikes"})
-            self.out_detector_i = nest.Create("spike_detector", self.n_output_clusters,
+            self.out_detector_i = nest.Create("spike_detector",
+                                              self.n_output_clusters,
                                               params={"withgid": True,
                                                       "withtime": True,
                                                       "to_file": True,
@@ -389,10 +392,14 @@ class AdaptiveOptimizee(Optimizee):
                 0] * 1000.0 / (self.record_interval * n_recorded_bulk_in))
         if record_mean:
             for i in range(self.n_output_clusters):
-                self.mean_ca_out_e[i].append(nest.GetStatus([self.out_detector_e[i]], "n_events")[
-                    0] * 1000.0 / (self.record_interval*self.n_neurons_out_e))
-                self.mean_ca_out_i[i].append(nest.GetStatus([self.out_detector_i[i]], "n_events")[
-                    0] * 1000.0 / (self.record_interval*self.n_neurons_out_i))
+                self.mean_ca_out_e[i].append(
+                    nest.GetStatus([self.out_detector_e[i]], "n_events")[
+                        0] * 1000.0 / (
+                                self.record_interval * self.n_neurons_out_e))
+                self.mean_ca_out_i[i].append(
+                    nest.GetStatus([self.out_detector_i[i]], "n_events")[
+                        0] * 1000.0 / (
+                                self.record_interval * self.n_neurons_out_i))
         spikes = nest.GetStatus(self.bulks_detector_ex, keys="events")[0]
         visualize.spike_plot(spikes, "Bulk spikes",
                              idx=indx, gen_idx=gen_idx, save=save)
@@ -525,16 +532,17 @@ class AdaptiveOptimizee(Optimizee):
                 print("Progress: " + str(j / 2) + "%")
             if self.parameters.record_spiking_firingrate:
                 self.record_fr(indx=j, gen_idx=self.gen_idx,
-                               save=self.parameters.save_plot)
+                               save=self.parameters.save_plot,
+                               record_mean=True)
                 self.clear_spiking_events()
             else:
                 self.record_ca()
             self.record_connectivity()
         print("Simulation loop finished successfully")
         model_out = softmax(
-            [self.mean_ca_e[j][-1] for j in range(10)])
+            [self.mean_ca_out_e[j][-1] for j in range(self.n_output_clusters)])
         label = self.target_labels[-1]
-        target = np.zeros(10)
+        target = np.zeros(self.n_output_clusters)
         target[label] = 1.0
         fitness = ((target - model_out) ** 2).sum()
         print(fitness)
@@ -594,14 +602,14 @@ class AdaptiveOptimizee(Optimizee):
         f.close()
 
         # # Out connections
-        # connections = nest.GetStatus(nest.GetConnections(self.nodes_out_e[0]))
-        # f = open('conn_oute_0_{}.bin'.format(ids), "wb")
-        # pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
-        # f.close()
-        # connections = nest.GetStatus(nest.GetConnections(self.nodes_out_i[0]))
-        # f = open('conn_outi_0_{}.bin'.format(ids), "wb")
-        # pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
-        # f.close()
+        connections = nest.GetStatus(nest.GetConnections(self.nodes_out_e[0]))
+        f = open('conn_oute_0_{}.bin'.format(ids), "wb")
+        pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
+        f.close()
+        connections = nest.GetStatus(nest.GetConnections(self.nodes_out_i[0]))
+        f = open('conn_outi_0_{}.bin'.format(ids), "wb")
+        pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
+        f.close()
 
 
 def remove_files(extensions):
@@ -614,34 +622,3 @@ def remove_files(extensions):
                 os.remove(f)
         except OSError as ose:
             print(ose)
-
-
-if __name__ == "__main__":
-    target_label = ['3', '0']
-    other_label = ['2', '1', '4', '5', '6', '7', '8', '9']
-    adapt_neuron = AdaptiveOptimizee()
-    data_set = adapt_neuron.get_mnist_data(target_label, other_label)
-    adapt_neuron.set_mnist_data(data_set)
-    remove_files(['*.eps', '*.spikes'])
-    # for saving the firing rates
-    fr_dict = {}
-    for i in range(1000):
-        adapt_neuron.gen_idx = i
-        adapt_neuron.simulate(iteration=i, target_label=target_label,
-                              other_label=other_label,
-                              record_spiking_fr=True,
-                              save_plot=False)
-        adapt_neuron.plot_all(idx=i, save=False)
-        key = adapt_neuron.target_labels[-1]
-        if key not in fr_dict:
-            fr_dict[key] = {"ex": [],
-                            "inh": []}
-            fr_dict[key]["ex"].append(adapt_neuron.mean_ca_e)
-            fr_dict[key]["inh"].append(adapt_neuron.mean_ca_i)
-
-        else:
-            fr_dict[key]["ex"].append(adapt_neuron.mean_ca_e)
-            fr_dict[key]["inh"].append(adapt_neuron.mean_ca_i)
-        adapt_neuron.clear_records()
-    # save firing rates
-    np.save('firing_rates.npy', fr_dict)
