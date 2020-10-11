@@ -22,10 +22,9 @@ def run_experiment():
     pop_size = 2
     optimizer_parameters = EnsembleKalmanFilterParameters(gamma=0.01,
                                                           maxit=1,
-                                                          n_ensembles=pop_size,
                                                           n_iteration=3,
                                                           pop_size=pop_size,
-                                                          n_batches=1,
+                                                          n_batches=10,
                                                           online=False,
                                                           seed=1234,
                                                           stop_criterion=1e-2,

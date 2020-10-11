@@ -60,7 +60,7 @@ class Experiment(object):
 
         trajectory_name = kwargs.get('trajectory_name', 'trajectory')
 
-        self.paths = Paths(name, dict(run_num='test'),
+        self.paths = Paths(name, dict(),
                            root_dir_path=self.root_dir_path,
                            suffix="-" + trajectory_name)
 
@@ -105,8 +105,8 @@ class Experiment(object):
             "err_file": "stderr",
             "out_file": "stdout",
             "tasks_per_job": "1",
-            "exec": "python3 " + os.path.join(self.paths.simulation_path,
-                                              "run_files/run_optimizee.py"),
+            "exec": "python " + os.path.join(self.paths.simulation_path,
+                                             "run_files/run_optimizee.py"),
             "ready_file": os.path.join(self.paths.root_dir_path,
                                        "ready_files/ready_w_"),
             "work_path": self.paths.root_dir_path,

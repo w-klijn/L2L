@@ -18,7 +18,7 @@ import l2l.optimizers.kalmanfilter.data as data
 logger = logging.getLogger("optimizers.kalmanfilter")
 
 EnsembleKalmanFilterParameters = namedtuple(
-    'EnsembleKalmanFilter', ['gamma', 'maxit', 'n_iteration', 'n_ensembles',
+    'EnsembleKalmanFilter', ['gamma', 'maxit', 'n_iteration',
                              'pop_size', 'n_batches', 'online', 'seed', 'path',
                              'stop_criterion']
 )
@@ -26,20 +26,20 @@ EnsembleKalmanFilterParameters = namedtuple(
 EnsembleKalmanFilterParameters.__doc__ = """
 :param gamma: float, A small value, multiplied with the eye matrix  
 :param maxit: int, Epochs to run inside the Kalman Filter
-:param n_ensembles: int, Number of ensembles
 :param n_iteration: int, Number of iterations to perform
 :param pop_size: int, Minimal number of individuals per simulation.
-:param n_batches: int, Number of mini-batches to use in the Kalman Filter
+    Corresponds to number of ensembles
+:param n_batches: int, Number of mini-batches to use for training
 :param online: bool, Indicates if only one data point will used, 
-               Default: False
+    Default: False
 :param sampling_generation: After `sampling_generation` steps a gaussian sampling 
-        on the parameters of the best individual is done, ranked by the fitness
-        value 
+    on the parameters of the best individual is done, ranked by the fitness
+    value 
 :param seed: The random seed used to sample and fit the distribution. 
-             Uses a random generator seeded with this seed.
+    Uses a random generator seeded with this seed.
 :param path: String, Root path for the file saving and loading the connections
 :param stop_criterion: float, When the current fitness is smaller or equal the 
-       `stop_criterion` the optimization in the outer loop ends
+    `stop_criterion` the optimization in the outer loop ends
 """
 
 
@@ -69,12 +69,11 @@ class EnsembleKalmanFilter(Optimizer):
         traj.f_add_parameter('gamma', parameters.gamma, comment='Noise level')
         traj.f_add_parameter('maxit', parameters.maxit,
                              comment='Maximum iterations')
-        traj.f_add_parameter('n_ensembles', parameters.n_ensembles,
-                             comment='Number of ensembles')
         traj.f_add_parameter('n_iteration', parameters.n_iteration,
                              comment='Number of iterations to run')
         traj.f_add_parameter('n_batches', parameters.n_batches)
         traj.f_add_parameter('online', parameters.online)
+        # TODO reactivate?
         # traj.f_add_parameter('sampling_generation',
         #                      parameters.sampling_generation)
         traj.f_add_parameter('seed', np.uint32(parameters.seed),
@@ -98,8 +97,7 @@ class EnsembleKalmanFilter(Optimizer):
         self.random_state = np.random.RandomState(traj.parameters.seed)
 
         current_eval_pop = [self.optimizee_create_individual(size_e, size_i)
-                            for i in
-                            range(parameters.pop_size)]
+                            for _ in range(parameters.pop_size)]
 
         if optimizee_bounding_func is not None:
             current_eval_pop = [self.optimizee_bounding_func(ind) for ind in
@@ -125,10 +123,15 @@ class EnsembleKalmanFilter(Optimizer):
         self.test_labels_other = None
         # get the targets
         self.get_mnist_data()
+        if self.train_labels:
+            self.optimizee_labels, self.random_ids = self.randomize_labels(
+                self.train_labels, size=10)
+        else:
+            raise AttributeError('Train Labels are not set, please check.')
 
         for e in self.eval_pop:
-            e["targets"] = self.train_labels
-            e["train_set"] = self.train_set
+            e["targets"] = self.optimizee_labels
+            e["train_set"] = [self.train_set[r] for r in self.random_ids]
         self.g = 0
 
         self._expand_trajectory(traj)
@@ -140,15 +143,18 @@ class EnsembleKalmanFilter(Optimizer):
         self.other_set, self.other_labels, self.test_set_other, self.test_labels_other = data.fetch(
             path='./mnist784_dat/', labels=self.other_label)
 
-    def set_other_external_input(self, iteration):
-        random_id = np.random.randint(low=0, high=len(self.other_set))
-        image = self.other_set[random_id]
-        # Save other image for reference
-        plottable_image = np.reshape(image, (28, 28))
-        plt.imshow(plottable_image, cmap='gray_r')
-        plt.title('Index: {}'.format(random_id))
-        plt.savefig('other_input{}.eps'.format(iteration), format='eps')
-        plt.close()
+    @staticmethod
+    def randomize_labels(labels, size):
+        """
+        Randomizes given labels `labels` with size `size`.
+
+        :param labels: list of strings with labels
+        :param size: int, size of how many labels should be returned
+        :return list of randomized labels
+        :return list of random numbers used to randomize the `labels` list
+        """
+        rnd = np.random.randint(low=0, high=len(labels), size=size)
+        return [int(labels[i]) for i in rnd], rnd
 
     def post_process(self, traj, fitnesses_results):
         self.eval_pop.clear()
@@ -174,9 +180,9 @@ class EnsembleKalmanFilter(Optimizer):
                                           method=pp.MinMaxScaler)
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
-        model_outs = model_outs.reshape((ensemble_size, len(self.target_label),
-                                         1))
-        observations = int(self.target_label[0])
+        model_outs = model_outs.reshape((ensemble_size,
+                                         len(self.optimizee_labels), 1))
+        observations = [int(t) for t in self.optimizee_labels]
 
         enkf = EnKF(maxit=traj.maxit,
                     online=traj.online,

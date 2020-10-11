@@ -121,9 +121,9 @@ class AdaptiveOptimizee(Optimizee):
 
     def _get_net_structure(self, typ):
         if typ == 'e':
-            return tuple(self.nodes_in + self.nodes_e)
+            return tuple(np.ravel(self.nodes_out_e))
         else:
-            return tuple(self.nodes_in + self.nodes_i)
+            return tuple(np.ravel(self.nodes_out_i))
 
     def reset_kernel(self):
         nest.ResetKernel()
@@ -380,7 +380,7 @@ class AdaptiveOptimizee(Optimizee):
             nest.SetStatus([self.out_detector_e[i]], "n_events", 0)
             nest.SetStatus([self.out_detector_i[i]], "n_events", 0)
 
-    def record_fr(self, indx, gen_idx, record_mean=False, save=True):
+    def record_fr(self, indx, gen_idx, record_out=False, save=True):
         """ Records firing rates """
         n_recorded_bulk_ex = self.n_bulk_ex_neurons
         n_recorded_bulk_in = self.n_bulk_in_neurons
@@ -390,7 +390,7 @@ class AdaptiveOptimizee(Optimizee):
         self.mean_ca_i.append(
             nest.GetStatus(self.bulks_detector_in, "n_events")[
                 0] * 1000.0 / (self.record_interval * n_recorded_bulk_in))
-        if record_mean:
+        if record_out:
             for i in range(self.n_output_clusters):
                 self.mean_ca_out_e[i].append(
                     nest.GetStatus([self.out_detector_e[i]], "n_events")[
@@ -407,12 +407,12 @@ class AdaptiveOptimizee(Optimizee):
         visualize.spike_plot(spikes, "Bulk spikes",
                              idx=indx, gen_idx=gen_idx, save=save)
 
-    def record_ca(self, record_mean=False):
+    def record_ca(self, record_out=False):
         ca_e = nest.GetStatus(self.nodes_e, 'Ca'),  # Calcium concentration
         self.mean_ca_e.append(np.mean(ca_e))
         ca_i = nest.GetStatus(self.nodes_i, 'Ca'),  # Calcium concentration
         self.mean_ca_i.append(np.mean(ca_i))
-        if record_mean:
+        if record_out:
             for ii in range(self.n_output_clusters):
                 # Calcium concentration
                 ca_e = nest.GetStatus(self.nodes_out_e[ii], 'Ca'),
@@ -425,6 +425,7 @@ class AdaptiveOptimizee(Optimizee):
         self.mean_ca_e = []
         self.mean_ca_out_e = [[] for _ in range(self.n_output_clusters)]
         self.mean_ca_out_i = [[] for _ in range(self.n_output_clusters)]
+        nest.SetStatus(self.input_spike_detector, {"n_events": 0})
         # try:
         #     nest.SetStatus(self.input_spike_detector, {"n_events": 0})
         # except AttributeError as e:
@@ -439,29 +440,19 @@ class AdaptiveOptimizee(Optimizee):
         # self.total_connections_i.append(sum(neuron['Bulk_I_Axn']['z_connected']
         #                                     for neuron in syn_elems_i))
 
-    def set_external_input(self, iteration, train_set, target):
-        train_px = train_set
+    def set_external_input(self, iteration, train_data, target):
         path = self.parameters.path
         save = self.parameters.save_plot
-        random_id = np.random.randint(low=0, high=len(train_px))
-        self.random_ids.append(random_id)
-        # leave the target labels as strings, which will be easier to save in
-        # a dictionary later on
-        label = target[random_id]
-        if isinstance(label, str):
-            label = int(label)
-        self.target_labels.append(label)
-        image = train_px[random_id]
         # Save image for reference
-        visualize.plot_image(image=image, random_id=random_id,
+        visualize.plot_image(image=train_data, random_id=target,
                              iteration=iteration, path=path, save=save)
         if self.input_type == 'greyvalue':
-            rates = spike_generator.greyvalue(image,
+            rates = spike_generator.greyvalue(train_data,
                                               min_rate=1, max_rate=100)
             generator_stats = [{'rate': w} for w in rates]
             nest.SetStatus(self.pixel_rate_generators, generator_stats)
         elif self.input_type == 'greyvalue_sequential':
-            rates = spike_generator.greyvalue_sequential(image,
+            rates = spike_generator.greyvalue_sequential(train_data,
                                                          min_rate=1,
                                                          max_rate=100,
                                                          start_time=0,
@@ -470,7 +461,7 @@ class AdaptiveOptimizee(Optimizee):
             nest.SetStatus(self.pixel_rate_generators, generator_stats)
         else:
             train_spikes, train_spike_times = spike_generator.bellec_spikes(
-                train_px[random_id], self.n_input_neurons, self.dt)
+                train_data, self.n_input_neurons, self.dt)
             for ii, ii_spike_gen in enumerate(self.pixel_rate_generators):
                 iter_neuron_spike_times = np.multiply(train_spikes[:, ii],
                                                       train_spike_times)
@@ -505,9 +496,7 @@ class AdaptiveOptimizee(Optimizee):
         # prepare the connections etc.
         self.prepare_network()
         train_set = traj.individual.train_set
-        target = traj.individual.targets
-        self.set_external_input(iteration=self.gen_idx, train_set=train_set,
-                                target=target)
+        targets = traj.individual.targets
         self.weights_e = traj.individual.weights_e
         self.weights_i = traj.individual.weights_i
         self.replace_weights(self.weights_e,
@@ -520,40 +509,52 @@ class AdaptiveOptimizee(Optimizee):
             print('Warm up')
             nest.Simulate(self.warm_up_time)
             print('Warm up done')
-        if self.parameters.record_spiking_firingrate:
-            self.clear_spiking_events()
         # cooling time, empty simulation
+        print('Cooling period')
+        # Clear input
+        self.clear_input()
         nest.Simulate(self.cooling_time)
+        print('Cooling done')
         # start simulation
-        sim_steps = np.arange(0, self.t_sim, self.record_interval)
-        for j, step in enumerate(sim_steps):
-            nest.Simulate(self.record_interval)
-            if j % 20 == 0:
-                print("Progress: " + str(j / 2) + "%")
+        fitnesses = []
+        model_outs = []
+        for idx, target in enumerate(targets):
+            self.set_external_input(iteration=self.gen_idx,
+                                    train_data=train_set[idx],
+                                    target=target)
+            sim_steps = np.arange(0, self.t_sim, self.record_interval)
+            for j, step in enumerate(sim_steps):
+                nest.Simulate(self.record_interval)
+                if j % 20 == 0:
+                    print("Progress: " + str(j / 2) + "%")
+                if self.parameters.record_spiking_firingrate:
+                    self.record_fr(indx=j, gen_idx=self.gen_idx,
+                                   save=self.parameters.save_plot,
+                                   record_out=True)
+                    self.clear_spiking_events()
+                else:
+                    self.record_ca(record_out=True)
+                self.record_connectivity()
+            print("Simulation loop {} finished successfully".format(idx))
+            softm = softmax(
+                [self.mean_ca_out_e[j][-1] for j in range(self.n_output_clusters)])
+            model_outs.append(softm)
+            # one hot encoding
+            label = np.zeros(self.n_output_clusters)
+            label[target] = 1.0
+            fitness = ((label - softm) ** 2).sum()
+            print('Fitness {} for target {}'.format(fitness, target))
+            # clear lists
+            self.clear_records()
             if self.parameters.record_spiking_firingrate:
-                self.record_fr(indx=j, gen_idx=self.gen_idx,
-                               save=self.parameters.save_plot,
-                               record_mean=True)
                 self.clear_spiking_events()
-            else:
-                self.record_ca()
-            self.record_connectivity()
-        print("Simulation loop finished successfully")
-        model_out = softmax(
-            [self.mean_ca_out_e[j][-1] for j in range(self.n_output_clusters)])
-        label = self.target_labels[-1]
-        target = np.zeros(self.n_output_clusters)
-        target[label] = 1.0
-        fitness = ((target - model_out) ** 2).sum()
-        print(fitness)
-        return dict(fitness=fitness, model_out=model_out)
+        return dict(fitness=np.mean(fitnesses), model_out=model_outs)
 
     @staticmethod
     def replace_weights(weights, path='.', typ='e'):
         # Read the connections, i.e. sources and targets
         conns = pd.read_csv(
             os.path.join(path, '{}_connections.csv'.format(typ)))
-        # weights = traj.individual.connection_weights
 
         sources = conns['source'].values
         targets = conns['target'].values
