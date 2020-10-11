@@ -121,9 +121,9 @@ class AdaptiveOptimizee(Optimizee):
 
     def _get_net_structure(self, typ):
         if typ == 'e':
-            return tuple(np.ravel(self.nodes_out_e))
+            return self.nodes_e + tuple(np.ravel(self.nodes_out_e))
         else:
-            return tuple(np.ravel(self.nodes_out_i))
+            return self.nodes_i + tuple(np.ravel(self.nodes_out_i))
 
     def reset_kernel(self):
         nest.ResetKernel()
@@ -444,8 +444,9 @@ class AdaptiveOptimizee(Optimizee):
         path = self.parameters.path
         save = self.parameters.save_plot
         # Save image for reference
-        visualize.plot_image(image=train_data, random_id=target,
-                             iteration=iteration, path=path, save=save)
+        if save:
+            visualize.plot_image(image=train_data, random_id=target,
+                                 iteration=iteration, path=path, save=save)
         if self.input_type == 'greyvalue':
             rates = spike_generator.greyvalue(train_data,
                                               min_rate=1, max_rate=100)
@@ -475,14 +476,15 @@ class AdaptiveOptimizee(Optimizee):
 
     def plot_all(self, idx, save=True):
         spikes = nest.GetStatus(self.input_spike_detector, keys="events")[0]
-        visualize.spike_plot(spikes, "Input spikes",
-                             gen_idx=self.gen_idx, idx=0, save=save)
-        # visualize.plot_data(idx, self.mean_ca_e, self.mean_ca_i,
-        #                     self.total_connections_e,
-        #                     self.total_connections_i)
-        visualize.plot_fr(idx=idx, mean_ca_e=self.mean_ca_e,
-                          mean_ca_i=self.mean_ca_i, save=save)
-        # visualize.plot_output(idx, self.mean_ca_e_out)
+        if save:
+            visualize.spike_plot(spikes, "Input spikes",
+                                 gen_idx=self.gen_idx, idx=0, save=save)
+            # visualize.plot_data(idx, self.mean_ca_e, self.mean_ca_i,
+            #                     self.total_connections_e,
+            #                     self.total_connections_i)
+            visualize.plot_fr(idx=idx, mean_ca_e=self.mean_ca_e,
+                              mean_ca_i=self.mean_ca_i, save=save)
+            # visualize.plot_output(idx, self.mean_ca_e_out)
 
     def create_individual(self, size_e, size_i):
         weights_e = np.random.normal(self.psc_e, 100., size_e)
@@ -543,11 +545,13 @@ class AdaptiveOptimizee(Optimizee):
             label = np.zeros(self.n_output_clusters)
             label[target] = 1.0
             fitness = ((label - softm) ** 2).sum()
+            fitnesses.append(fitness)
             print('Fitness {} for target {}'.format(fitness, target))
             # clear lists
             self.clear_records()
             if self.parameters.record_spiking_firingrate:
                 self.clear_spiking_events()
+        print('Fitness values {}, mean {}'.format(fitnesses, np.mean(fitnesses)))
         return dict(fitness=np.mean(fitnesses), model_out=model_outs)
 
     @staticmethod

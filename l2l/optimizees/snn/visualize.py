@@ -25,7 +25,6 @@ def plot_image(image, random_id, iteration, path, save=True):
 
 def spike_plot(spikes, title, gen_idx, idx='', show=False, save=True):
     """ Plots spiking activity in a dot plot """
-    print('Gen {} idx {}'.format(gen_idx, idx))
     events = spikes["senders"]
     times = spikes["times"]
 
