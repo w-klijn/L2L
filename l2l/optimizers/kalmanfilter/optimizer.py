@@ -176,24 +176,26 @@ class EnsembleKalmanFilter(Optimizer):
 
         # TODO make sampling optional
         # weights = self._sample_from_individual(weights, fitness, bins=10000)
-        ens, scaler = self._scale_weights(weights, normalize=True,
-                                          method=pp.MinMaxScaler)
+        # ens, scaler = self._scale_weights(weights, normalize=True,
+        #                                   method=pp.MinMaxScaler)
+        ens = np.array(weights)
+        ens = ens / np.max(ens)
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
         model_outs = model_outs.reshape((ensemble_size,
-                                         len(self.optimizee_labels), 1))
-        observations = [int(t) for t in self.optimizee_labels]
+                                         len(self.target_label),
+                                         traj.n_batches))
 
         enkf = EnKF(maxit=traj.maxit,
                     online=traj.online,
                     n_batches=traj.n_batches)
         enkf.fit(ensemble=ens,
                  ensemble_size=ensemble_size,
-                 observations=np.array(observations)[np.newaxis],
+                 observations=np.array(self.optimizee_labels),
                  model_output=model_outs,
                  gamma=gamma)
         # These are all the updated weights for each ensemble
-        results = scaler.inverse_transform(enkf.ensemble)
+        results = enkf.ensemble  # scaler.inverse_transform(enkf.ensemble)
         self.plot_distribution(weights=results, gen=traj.generation, mean=True)
 
         generation_name = 'generation_{}'.format(traj.generation)

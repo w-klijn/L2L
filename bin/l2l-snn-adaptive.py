@@ -26,7 +26,7 @@ def run_experiment():
                                                           pop_size=pop_size,
                                                           n_batches=10,
                                                           online=False,
-                                                          seed=1234,
+                                                          seed=optimizer_seed,
                                                           stop_criterion=1e-2,
                                                           path=experiment.root_dir_path)
 
