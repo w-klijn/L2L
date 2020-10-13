@@ -179,7 +179,7 @@ class EnsembleKalmanFilter(Optimizer):
         # ens, scaler = self._scale_weights(weights, normalize=True,
         #                                   method=pp.MinMaxScaler)
         ens = np.array(weights)
-        ens = ens / np.max(ens)
+        # ens = ens / np.max(ens)
         model_outs = np.array([traj.current_results[i][1]['model_out'] for i in
                                range(ensemble_size)])
         model_outs = model_outs.reshape((ensemble_size,
@@ -195,7 +195,7 @@ class EnsembleKalmanFilter(Optimizer):
                  model_output=model_outs,
                  gamma=gamma)
         # These are all the updated weights for each ensemble
-        results = enkf.ensemble  # scaler.inverse_transform(enkf.ensemble)
+        results = enkf.ensemble.cpu().numpy()  # scaler.inverse_transform(enkf.ensemble)
         self.plot_distribution(weights=results, gen=traj.generation, mean=True)
 
         generation_name = 'generation_{}'.format(traj.generation)
@@ -209,7 +209,7 @@ class EnsembleKalmanFilter(Optimizer):
             generation_name + '.algorithm_params', generation_result_dict)
 
         # Produce the new generation of individuals
-        if self.g < len(self.target_label) or \
+        if self.g < len(self.train_labels) or \
                 traj.stop_criterion <= self.current_fitness \
                 or self.g < traj.n_iteration:
             # Create new individual based on the results of the update from the EnKF.
@@ -217,7 +217,7 @@ class EnsembleKalmanFilter(Optimizer):
                 {'weights_e': results[i][:len(individuals[i].weights_e)],
                  'weights_i': results[i][len(individuals[i].weights_i):],
                  'train_set': self.train_set,
-                 'targets': self.target_label} for i in
+                 'targets': self.optimizee_labels} for i in
                 range(ensemble_size)]
 
             # Check this bounding function
