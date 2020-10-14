@@ -1,8 +1,10 @@
 from jube2.main import main
+from l2l.utils.trajectory import Trajectory
 import os.path
 import pickle
 import time
 import logging
+import shutil
 
 logger = logging.getLogger("JUBERunner")
 
@@ -51,6 +53,7 @@ class JUBERunner():
         self.executor = args['exec']
         self.filename = ""
         self.path = args['paths_obj'].simulation_path
+        self.tmp_trajectory = None
         # Create directories for workspace
         subdirs = ['jube_xml', 'run_files', 'ready_files', 'trajectories', 'results', 'work']
         self.work_paths = {sdir: os.path.join(self.path, sdir) for sdir in subdirs}
@@ -61,6 +64,9 @@ class JUBERunner():
             os.makedirs(self.work_paths[dir], exist_ok=True)
 
         self.zeepath = os.path.join(self.path, "optimizee.bin")
+
+    def add_tmp_trajectory(self, trajectory):
+        self.tmp_trajectory = Trajectory(name='tmp_trajectory')
 
 
     def write_pop_for_jube(self, trajectory, generation):
@@ -203,14 +209,20 @@ class JUBERunner():
         ready_files = []
         path_ready = os.path.join(self.work_paths["ready_files"], "ready_%d_"%generation)
         self.prepare_run_file(path_ready)
+        # remove old trajectories
+        if os.path.isdir(self.path + "/trajectories/"):
+            shutil.rmtree(self.path + "/trajectories/")
+        os.mkdir(self.path + "/trajectories/")
+        self.add_tmp_trajectory(trajectory)
 
         # Dump all trajectories for each optimizee run in the generation
         for ind in self.trajectory.individuals[generation]:
-            trajectory.individual = ind
+            self.tmp_trajectory.individual = ind
+            self.tmp_trajectory.generation = generation
             trajfname = "trajectory_%s_%s.bin" % (ind.ind_idx, generation)
             handle = open(os.path.join(self.work_paths["trajectories"], trajfname),
                           "wb")
-            pickle.dump(trajectory, handle, pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self.tmp_trajectory, handle, pickle.HIGHEST_PROTOCOL)
             handle.close()
             ready_files.append(path_ready + str(ind.ind_idx))
 
