@@ -185,6 +185,10 @@ class EnsembleKalmanFilter(Optimizer):
         model_outs = model_outs.reshape((ensemble_size,
                                          len(self.target_label),
                                          traj.n_batches))
+        logger.info('Sorted Fitness {}'.format(np.sort([traj.current_results[
+                                                            i][1]['fitness']
+                                                        for i in
+                                                        range(ensemble_size)])))
 
         enkf = EnKF(maxit=traj.maxit,
                     online=traj.online,

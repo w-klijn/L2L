@@ -215,7 +215,6 @@ class AdaptiveOptimizee(Optimizee):
                 self.target_px[n_img], start_time=0, end_time=783, min_rate=0,
                 max_rate=10)
             self.rates = rates
-            # FIXME changed to len(rates) from len(offsets)
             self.pixel_rate_generators = nest.Create(
                 "poisson_generator", len(rates))
 
@@ -497,6 +496,8 @@ class AdaptiveOptimizee(Optimizee):
         self.ind_idx = traj.individual.ind_idx
         # prepare the connections etc.
         self.prepare_network()
+        self.connect_external_input()
+        self.connect_spike_detectors()
         train_set = traj.individual.train_set
         targets = traj.individual.targets
         self.weights_e = traj.individual.weights_e
@@ -511,21 +512,22 @@ class AdaptiveOptimizee(Optimizee):
             print('Warm up')
             nest.Simulate(self.warm_up_time)
             print('Warm up done')
-        # cooling time, empty simulation
-        print('Cooling period')
-        # Clear input
-        self.clear_input()
-        nest.Simulate(self.cooling_time)
-        print('Cooling done')
         # start simulation
         fitnesses = []
         model_outs = []
         for idx, target in enumerate(targets):
+            # cooling time, empty simulation
+            print('Cooling period')
+            # Clear input
+            self.clear_input()
+            nest.Simulate(self.cooling_time)
+            print('Cooling done')
             self.set_external_input(iteration=self.gen_idx,
                                     train_data=train_set[idx],
                                     target=target)
             sim_steps = np.arange(0, self.t_sim, self.record_interval)
             for j, step in enumerate(sim_steps):
+                # Do the simulation
                 nest.Simulate(self.record_interval)
                 if j % 20 == 0:
                     print("Progress: " + str(j / 2) + "%")
@@ -533,20 +535,18 @@ class AdaptiveOptimizee(Optimizee):
                     self.record_fr(indx=j, gen_idx=self.gen_idx,
                                    save=self.parameters.save_plot,
                                    record_out=True)
-                    self.clear_spiking_events()
                 else:
                     self.record_ca(record_out=True)
                 self.record_connectivity()
             print("Simulation loop {} finished successfully".format(idx))
-            softm = softmax(
-                [self.mean_ca_out_e[j][-1] for j in range(self.n_output_clusters)])
+            softm = softmax(np.mean(self.mean_ca_out_e, axis=1))
+            argmax = np.argmax(softm)
             model_outs.append(softm)
             # one hot encoding
-            label = np.zeros(self.n_output_clusters)
-            label[target] = 1.0
-            fitness = ((label - softm) ** 2).sum()
+            label = np.eye(self.n_output_clusters)[target]
+            pred = np.eye(self.n_output_clusters)[argmax]
+            fitness = ((label - pred) ** 2).sum()
             fitnesses.append(fitness)
-            print('Fitness {} for target {}'.format(fitness, target))
             # clear lists
             self.clear_records()
             if self.parameters.record_spiking_firingrate:
