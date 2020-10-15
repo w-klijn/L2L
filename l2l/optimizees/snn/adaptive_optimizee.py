@@ -531,16 +531,19 @@ class AdaptiveOptimizee(Optimizee):
                 nest.Simulate(self.record_interval)
                 if j % 20 == 0:
                     print("Progress: " + str(j / 2) + "%")
-            if self.parameters.record_spiking_firingrate:
-                self.record_fr(indx=j, gen_idx=self.gen_idx,
-                               save=self.parameters.save_plot,
-                               record_out=True)
-            else:
-                self.record_ca(record_out=True)
+                if self.parameters.record_spiking_firingrate:
+                    self.record_fr(indx=j, gen_idx=self.gen_idx,
+                                   save=self.parameters.save_plot,
+                                   record_out=True)
+                    self.clear_spiking_events()
+                else:
+                    self.record_ca(record_out=True)
                 self.record_connectivity()
             print("Simulation loop {} finished successfully".format(idx))
-            softm = softmax([self.mean_ca_out_e[j]
-                             for j in range(self.n_output_clusters)])
+            print('Mean out e ', self.mean_ca_out_e)
+            print('Mean e ', self.mean_ca_e)
+            softm = softmax([self.mean_ca_out_e[j][-1] for j in
+                            range(self.n_output_clusters)])
             argmax = np.argmax(softm)
             model_outs.append(softm)
             # one hot encoding
@@ -548,10 +551,10 @@ class AdaptiveOptimizee(Optimizee):
             pred = np.eye(self.n_output_clusters)[argmax]
             fitness = ((label - pred) ** 2).sum()
             fitnesses.append(fitness)
+            print('Fitness {} for target {}, softmax {}, argmax {}'.format(
+                fitness, target, softm, argmax))
             # clear lists
             self.clear_records()
-            if self.parameters.record_spiking_firingrate:
-                self.clear_spiking_events()
         print('Fitness values {}, mean {}'.format(
             fitnesses, np.mean(fitnesses)))
         return dict(fitness=np.mean(fitnesses), model_out=model_outs)
