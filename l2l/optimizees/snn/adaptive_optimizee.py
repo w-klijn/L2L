@@ -336,10 +336,10 @@ class AdaptiveOptimizee(Optimizee):
         # Bulk to out
         conn_dict_e = {'rule': 'fixed_indegree',
                        # 0.3 * self.number_out_exc_neurons
-                       'indegree': int(0.03 * self.n_bulk_ex_neurons)}
+                       'indegree': int(0.15 * self.n_bulk_ex_neurons)}
         conn_dict_i = {'rule': 'fixed_indegree',
                        # 0.2 * self.number_out_exc_neurons
-                       'indegree': int(0.02 * self.n_bulk_in_neurons)}
+                       'indegree': int(0.1 * self.n_bulk_in_neurons)}
         syn_dict_e = {"model": "random_synapse",
                       'weight': {"distribution": "normal",
                                  "mu": self.psc_e,
@@ -394,11 +394,11 @@ class AdaptiveOptimizee(Optimizee):
                 self.mean_ca_out_e[i].append(
                     nest.GetStatus([self.out_detector_e[i]], "n_events")[
                         0] * 1000.0 / (
-                                self.record_interval * self.n_neurons_out_e))
+                        self.record_interval * self.n_neurons_out_e))
                 self.mean_ca_out_i[i].append(
                     nest.GetStatus([self.out_detector_i[i]], "n_events")[
                         0] * 1000.0 / (
-                                self.record_interval * self.n_neurons_out_i))
+                        self.record_interval * self.n_neurons_out_i))
         spikes = nest.GetStatus(self.bulks_detector_ex, keys="events")[0]
         visualize.spike_plot(spikes, "Bulk spikes",
                              idx=indx, gen_idx=gen_idx, save=save)
@@ -520,6 +520,9 @@ class AdaptiveOptimizee(Optimizee):
             print('Cooling period')
             # Clear input
             self.clear_input()
+            self.clear_records()
+            if self.parameters.record_spiking_firingrate:
+                self.clear_spiking_events()
             nest.Simulate(self.cooling_time)
             print('Cooling done')
             self.set_external_input(iteration=self.gen_idx,
@@ -543,7 +546,7 @@ class AdaptiveOptimizee(Optimizee):
             print('Mean out e ', self.mean_ca_out_e)
             print('Mean e ', self.mean_ca_e)
             softm = softmax([self.mean_ca_out_e[j][-1] for j in
-                            range(self.n_output_clusters)])
+                             range(self.n_output_clusters)])
             argmax = np.argmax(softm)
             model_outs.append(softm)
             # one hot encoding
