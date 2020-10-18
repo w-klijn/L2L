@@ -125,7 +125,7 @@ class EnsembleKalmanFilter(Optimizer):
         self.get_mnist_data()
         if self.train_labels:
             self.optimizee_labels, self.random_ids = self.randomize_labels(
-                self.train_labels, size=10)
+                self.train_labels, size=traj.n_batches)
         else:
             raise AttributeError('Train Labels are not set, please check.')
 
@@ -189,6 +189,9 @@ class EnsembleKalmanFilter(Optimizer):
                                                             i][1]['fitness']
                                                         for i in
                                                         range(ensemble_size)])))
+        logger.info(
+            'Best fitness {} in generation {}'.format(self.current_fitness,
+                                                      self.g))
 
         enkf = EnKF(maxit=traj.maxit,
                     online=traj.online,
@@ -213,9 +216,7 @@ class EnsembleKalmanFilter(Optimizer):
             generation_name + '.algorithm_params', generation_result_dict)
 
         # Produce the new generation of individuals
-        if self.g < len(self.train_labels) or \
-                traj.stop_criterion <= self.current_fitness \
-                or self.g < traj.n_iteration:
+        if traj.stop_criterion <= self.current_fitness or self.g < traj.n_iteration:
             # Create new individual based on the results of the update from the EnKF.
             new_individual_list = [
                 {'weights_e': results[i][:len(individuals[i].weights_e)],
