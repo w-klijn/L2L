@@ -9,6 +9,7 @@ import numpy as np
 import nest
 import os
 import pandas as pd
+import pathlib
 import pickle
 
 AdaptiveOptimizeeParameters = namedtuple(
@@ -24,8 +25,10 @@ class AdaptiveOptimizee(Optimizee):
         seed = np.uint32(self.parameters.seed)
 
         self.random_state = np.random.RandomState(seed=seed)
+        fp = pathlib.Path(__file__).parent.absolute()
+        print(os.path.join(fp, 'config.json'))
         with open(
-                '/home/yegenoglu/Documents/toolbox/L2L/l2l/optimizees/snn/config.json') as jsonfile:
+                os.path.join(fp, 'config.json')) as jsonfile:
             self.config = json.load(jsonfile)
         seed = np.uint32(self.config['seed'])
         self.random_state = np.random.RandomState(seed=seed)
@@ -520,11 +523,11 @@ class AdaptiveOptimizee(Optimizee):
             print('Cooling period')
             # Clear input
             self.clear_input()
+            nest.Simulate(self.cooling_time)
+            print('Cooling done')
             self.clear_records()
             if self.parameters.record_spiking_firingrate:
                 self.clear_spiking_events()
-            nest.Simulate(self.cooling_time)
-            print('Cooling done')
             self.set_external_input(iteration=self.gen_idx,
                                     train_data=train_set[idx],
                                     target=target)
