@@ -3,7 +3,11 @@ sudo: false
 addons:
    apt:
       update: true
-      
+
+branches:
+  except:
+  - snn-enkf
+  
 language: python
 python: 
   - "3.6"
