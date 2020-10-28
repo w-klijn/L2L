@@ -13,7 +13,7 @@ import pathlib
 import pickle
 
 AdaptiveOptimizeeParameters = namedtuple(
-    'AdaptiveOptimizeeParameters', ['seed', 'path',
+    'AdaptiveOptimizeeParameters', ['path',
                                     'record_spiking_firingrate',
                                     'save_plot'])
 
@@ -22,9 +22,6 @@ class AdaptiveOptimizee(Optimizee):
     def __init__(self, traj, parameters):
         super().__init__(traj)
         self.parameters = parameters
-        seed = np.uint32(self.parameters.seed)
-
-        self.random_state = np.random.RandomState(seed=seed)
         fp = pathlib.Path(__file__).parent.absolute()
         print(os.path.join(fp, 'config.json'))
         with open(
@@ -32,6 +29,7 @@ class AdaptiveOptimizee(Optimizee):
             self.config = json.load(jsonfile)
         seed = np.uint32(self.config['seed'])
         self.random_state = np.random.RandomState(seed=seed)
+        nest.SetKernelStatus({"rng_seeds": [seed]})
         self.t_sim = self.config['t_sim']
         self.input_type = self.config['input_type']
         # Resolution, simulation steps in [ms]
@@ -95,7 +93,6 @@ class AdaptiveOptimizee(Optimizee):
         self.connect_internal_bulk()
         self.connect_external_input()
         self.connect_spike_detectors()
-        self.connect_internal_bulk()
         self.connect_noise_bulk()
         self.connect_internal_out()
         self.connect_bulk_to_out()
@@ -489,8 +486,10 @@ class AdaptiveOptimizee(Optimizee):
             # visualize.plot_output(idx, self.mean_ca_e_out)
 
     def create_individual(self, size_e, size_i):
-        weights_e = np.random.normal(self.psc_e, 100., size_e)
-        weights_i = np.random.normal(self.psc_i, 100., size_i)
+        mu = self.config['mu']
+        sigma = self.config['sigma']
+        weights_e = np.random.normal(mu, sigma, size_e)
+        weights_i = np.random.normal(mu, sigma, size_i)
         return {'weights_e': weights_e, 'weights_i': weights_i}
 
     def simulate(self, traj):
