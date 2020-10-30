@@ -533,7 +533,11 @@ class AdaptiveOptimizee(Optimizee):
         # prepare the connections etc.
         self.prepare_network()
         self.connect_external_input()
+        self.connect_internal_bulk()
+        self.connect_internal_out()
         self.connect_spike_detectors()
+        self.connect_noise_bulk()
+        self.connect_noise_out()
         train_set = traj.individual.train_set
         targets = traj.individual.targets
         weights_eeo = traj.individual.weights_eeo
@@ -614,9 +618,11 @@ class AdaptiveOptimizee(Optimizee):
         targets = conns['target'].values
         # weights = conns['weight'].values
         print('now replacing connection weights')
-        for (s, t, w) in zip(sources, targets, weights):
-            syn_spec = {'weight': w}
-            nest.Connect(tuple([s]), tuple([t]), syn_spec=syn_spec,
+        for i, (s, t, w) in enumerate(zip(sources, targets, weights)):
+            syn_spec = {'weight': float(int(w)),
+                        'model': 'static_synapse'}
+            nest.Connect(pre=tuple([s]), post=tuple([t]),
+                         syn_spec=syn_spec,
                          conn_spec='one_to_one')
 
     @staticmethod
