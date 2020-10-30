@@ -1,4 +1,5 @@
 from collections import OrderedDict, namedtuple
+from itertools import permutations, product
 from l2l.optimizees.optimizee import Optimizee
 from l2l.optimizees.snn import spike_generator, visualize
 from scipy.special import softmax
@@ -71,8 +72,6 @@ class AdaptiveOptimizee(Optimizee):
         self.out_detector_i = None
         self.rates = None
         self.target_px = None
-        self.weights_e = None
-        self.weights_i = None
         # Lists for connections
         self.total_connections_e = []
         self.total_connections_i = []
@@ -97,16 +96,27 @@ class AdaptiveOptimizee(Optimizee):
         self.connect_internal_out()
         self.connect_bulk_to_out()
         self.connect_noise_out()
-        # save connection structure
-        conns_e = nest.GetConnections(source=self._get_net_structure('e'))
-        self.save_connections(conns_e,
-                              path=self.parameters.path,
-                              typ='e')
-        conns_i = nest.GetConnections(source=self._get_net_structure('i'))
-        self.save_connections(conns_i,
-                              path=self.parameters.path,
-                              typ='i')
-        return len(conns_e), len(conns_i)
+        # create connection types of
+        # {'ee', 'ei', 'eoeo', 'eoio', 'ie', 'ii', 'ioeo', 'ioio'}
+        # e/i is the connection type, o indicates output
+        # eo means excitatory ouput connections
+        perms = set([''.join(p) for p in permutations('eeii', 2)])
+        out_perms = set([''.join(p) for p in product(['eo', 'io'], repeat=2)])
+        # only eeo, eio, ieo and iio are going to be optimized though
+        # set([''.join(p) product(['e', 'i'], ['eo', 'io'], repeat=1)])
+        optim_perms = {'eeo', 'eio', 'ieo', 'iio'}
+        perms = perms.union(out_perms, optim_perms)
+        # need dictionary to store the length specific to the outputs
+        d = {}
+        for p in perms:
+            source, target = self._get_net_structure(p)
+            conns = nest.GetConnections(
+                source=tuple(np.ravel(source)), target=tuple(np.ravel(target)))
+            self.save_connections(conns,
+                                  path=self.parameters.path,
+                                  typ=p)
+            d[p] = len(conns)
+        return d['eeo'], d['eio'], d['ieo'], d['iio']
 
     def prepare_network(self):
         """  Helper functions to create the network """
@@ -120,10 +130,31 @@ class AdaptiveOptimizee(Optimizee):
         nest.PrintNetwork(depth=2)
 
     def _get_net_structure(self, typ):
-        if typ == 'e':
-            return self.nodes_e + tuple(np.ravel(self.nodes_out_e))
-        else:
-            return self.nodes_i + tuple(np.ravel(self.nodes_out_i))
+        # types: {'ee', 'ei', 'eoeo', 'eoio', 'ie', 'ii', 'ioeo', 'ioio'}
+        if typ == 'ee':
+            return self.nodes_e, self.nodes_e
+        elif typ == 'ei':
+            return self.nodes_e, self.nodes_i
+        elif typ == 'ie':
+            return self.nodes_i, self.nodes_e
+        elif typ == 'ii':
+            return self.nodes_i, self.nodes_i
+        elif typ == 'eeo':
+            return self.nodes_e, self.nodes_out_e
+        elif typ == 'eio':
+            return self.nodes_e, self.nodes_out_i
+        elif typ == 'ieo':
+            return self.nodes_i, self.nodes_out_e
+        elif typ == 'iio':
+            return self.nodes_i, self.nodes_out_i
+        elif typ == 'eoeo':
+            return self.nodes_out_e, self.nodes_out_e
+        elif typ == 'eoio':
+            return self.nodes_out_e, self.nodes_out_i
+        elif typ == 'ioeo':
+            return self.nodes_out_i, self.nodes_out_e
+        elif typ == 'ioio':
+            return self.nodes_out_i, self.nodes_out_i
 
     def reset_kernel(self):
         nest.ResetKernel()
@@ -485,12 +516,15 @@ class AdaptiveOptimizee(Optimizee):
                               mean_ca_i=self.mean_ca_i, save=save)
             # visualize.plot_output(idx, self.mean_ca_e_out)
 
-    def create_individual(self, size_e, size_i):
+    def create_individual(self, size_eeo, size_eio, size_ieo, size_iio):
         mu = self.config['mu']
         sigma = self.config['sigma']
-        weights_e = np.random.normal(mu, sigma, size_e)
-        weights_i = np.random.normal(mu, sigma, size_i)
-        return {'weights_e': weights_e, 'weights_i': weights_i}
+        weights_eeo = np.random.normal(mu, sigma, size_eeo)
+        weights_eio = np.random.normal(mu, sigma, size_eio)
+        weights_ieo = np.random.normal(mu, sigma, size_ieo)
+        weights_iio = np.random.normal(mu, sigma, size_iio)
+        return {'weights_eeo': weights_eeo, 'weights_eio': weights_eio,
+                'weights_ieo': weights_ieo, 'weights_iio': weights_iio}
 
     def simulate(self, traj):
         # get indices
@@ -502,12 +536,18 @@ class AdaptiveOptimizee(Optimizee):
         self.connect_spike_detectors()
         train_set = traj.individual.train_set
         targets = traj.individual.targets
-        self.weights_e = traj.individual.weights_e
-        self.weights_i = traj.individual.weights_i
-        self.replace_weights(self.weights_e,
-                             self.parameters.path, typ='e')
-        self.replace_weights(self.weights_i,
-                             self.parameters.path, typ='i')
+        weights_eeo = traj.individual.weights_eeo
+        weights_eio = traj.individual.weights_eio
+        weights_ieo = traj.individual.weights_ieo
+        weights_iio = traj.individual.weights_iio
+        self.replace_weights(weights_eeo,
+                             self.parameters.path, typ='eeo')
+        self.replace_weights(weights_eio,
+                             self.parameters.path, typ='eio')
+        self.replace_weights(weights_ieo,
+                             self.parameters.path, typ='ieo')
+        self.replace_weights(weights_iio,
+                             self.parameters.path, typ='iio')
         # Warm up simulation
         print("Starting simulation")
         if self.gen_idx < 1:

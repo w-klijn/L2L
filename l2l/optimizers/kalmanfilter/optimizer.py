@@ -86,9 +86,10 @@ class EnsembleKalmanFilter(Optimizer):
                              comment='stopping threshold')
         #: The population (i.e. list of individuals) to be evaluated at the
         # next iteration
-        size_e, size_i = self.optimizee_prepare()  # Change 0 for a run id?
+        size_eeo, size_eio, size_ieo, size_iio = self.optimizee_prepare()
         _, self.optimizee_individual_dict_spec = dict_to_list(
-            self.optimizee_create_individual(size_e, size_i),
+            self.optimizee_create_individual(
+                size_eeo, size_eio, size_ieo, size_iio),
             get_dict_spec=True)
 
         traj.results.f_add_result_group('generation_params')
@@ -96,7 +97,10 @@ class EnsembleKalmanFilter(Optimizer):
         # Set the random state seed for distribution
         self.random_state = np.random.RandomState(traj.parameters.seed)
 
-        current_eval_pop = [self.optimizee_create_individual(size_e, size_i)
+        current_eval_pop = [self.optimizee_create_individual(size_eeo,
+                                                             size_eio,
+                                                             size_ieo,
+                                                             size_iio)
                             for _ in range(parameters.pop_size)]
 
         if optimizee_bounding_func is not None:
@@ -168,7 +172,8 @@ class EnsembleKalmanFilter(Optimizer):
         # weights = [traj.current_results[i][1]['connection_weights'] for i in
         #           range(ensemble_size)]
         weights = [np.concatenate(
-            (individuals[i].weights_e, individuals[i].weights_i))
+            (individuals[i].weights_eeo, individuals[i].weights_eio,
+             individuals[i].weights_ieo,  individuals[i].weights_iio))
             for i in range(ensemble_size)]
         fitness = [traj.current_results[i][1]['fitness'] for i in
                    range(ensemble_size)]
@@ -186,9 +191,9 @@ class EnsembleKalmanFilter(Optimizer):
                                          len(self.target_label),
                                          traj.n_batches))
         logger.info('Sorted Fitness {}'.format(np.sort([traj.current_results[
-                                                            i][1]['fitness']
-                                                        for i in
-                                                        range(ensemble_size)])))
+            i][1]['fitness']
+            for i in
+            range(ensemble_size)])))
         logger.info(
             'Best fitness {} in generation {}'.format(self.current_fitness,
                                                       self.g))
@@ -219,8 +224,10 @@ class EnsembleKalmanFilter(Optimizer):
         if traj.stop_criterion <= self.current_fitness or self.g < traj.n_iteration:
             # Create new individual based on the results of the update from the EnKF.
             new_individual_list = [
-                {'weights_e': results[i][:len(individuals[i].weights_e)],
-                 'weights_i': results[i][len(individuals[i].weights_i):],
+                {'weights_eeo': results[i][:len(individuals[i].weights_eeo)],
+                 'weights_eio': results[i][:len(individuals[i].weights_eio)],
+                 'weights_ieo': results[i][:len(individuals[i].weights_ieo)],
+                 'weights_iio': results[i][:len(individuals[i].weights_iio)],
                  'train_set': self.train_set,
                  'targets': self.optimizee_labels} for i in
                 range(ensemble_size)]
