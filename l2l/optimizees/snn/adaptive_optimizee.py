@@ -521,8 +521,8 @@ class AdaptiveOptimizee(Optimizee):
         sigma = self.config['sigma']
         weights_eeo = np.random.normal(mu, sigma, size_eeo)
         weights_eio = np.random.normal(mu, sigma, size_eio)
-        weights_ieo = np.random.normal(mu, sigma, size_ieo)
-        weights_iio = np.random.normal(mu, sigma, size_iio)
+        weights_ieo = np.random.normal(-mu, sigma, size_ieo)
+        weights_iio = np.random.normal(-mu, sigma, size_iio)
         return {'weights_eeo': weights_eeo, 'weights_eio': weights_eio,
                 'weights_ieo': weights_ieo, 'weights_iio': weights_iio}
 
@@ -546,12 +546,12 @@ class AdaptiveOptimizee(Optimizee):
         weights_iio = traj.individual.weights_iio
         self.replace_weights(weights_eeo,
                              self.parameters.path, typ='eeo')
-        self.replace_weights(weights_eio,
-                             self.parameters.path, typ='eio')
-        self.replace_weights(weights_ieo,
-                             self.parameters.path, typ='ieo')
-        self.replace_weights(weights_iio,
-                             self.parameters.path, typ='iio')
+        # self.replace_weights(weights_eio,
+        #                      self.parameters.path, typ='eio')
+        # self.replace_weights(weights_ieo,
+        #                      self.parameters.path, typ='ieo')
+        # self.replace_weights(weights_iio,
+        #                      self.parameters.path, typ='iio')
         # Warm up simulation
         print("Starting simulation")
         if self.gen_idx < 1:
@@ -618,8 +618,9 @@ class AdaptiveOptimizee(Optimizee):
         targets = conns['target'].values
         # weights = conns['weight'].values
         print('now replacing connection weights')
-        for i, (s, t, w) in enumerate(zip(sources, targets, weights)):
-            syn_spec = {'weight': float(int(w)),
+        for (s, t, w) in zip(sources, targets, weights):
+            print("Source {},Target {}, Weight {}".format(s, t, float(int(w))))
+           syn_spec = {'weight': float(int(w)),
                         'model': 'static_synapse'}
             nest.Connect(pre=tuple([s]), post=tuple([t]),
                          syn_spec=syn_spec,
@@ -627,13 +628,13 @@ class AdaptiveOptimizee(Optimizee):
 
     @staticmethod
     def save_connections(conn, path='.', typ='e'):
-        status = nest.GetStatus(conn)
-        d = OrderedDict({'source': [], 'target': []})
+        status=nest.GetStatus(conn)
+        d=OrderedDict({'source': [], 'target': []})
         for elem in status:
             d['source'].append(elem.get('source'))
             d['target'].append(elem.get('target'))
             # d['weight'].append(elem.get('weight'))
-        df = pd.DataFrame(d)
+        df=pd.DataFrame(d)
         df.to_pickle(
             os.path.join(path,
                          '{}_connections.pkl'.format(typ)))
@@ -643,34 +644,34 @@ class AdaptiveOptimizee(Optimizee):
 
     def checkpoint(self, ids):
         # Input connections
-        connections = nest.GetStatus(nest.GetConnections(self.nodes_in))
-        f = open('conn_input_{}.bin'.format(ids), "wb")
+        connections=nest.GetStatus(nest.GetConnections(self.nodes_in))
+        f=open('conn_input_{}.bin'.format(ids), "wb")
         pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
         # Bulk connections
-        connections = nest.GetStatus(nest.GetConnections(self.nodes_e))
-        f = open('conn_bulke_{}.bin'.format(ids), "wb")
+        connections=nest.GetStatus(nest.GetConnections(self.nodes_e))
+        f=open('conn_bulke_{}.bin'.format(ids), "wb")
         pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
         f.close()
-        connections = nest.GetStatus(nest.GetConnections(self.nodes_i))
-        f = open('conn_bulki_{}.bin'.format(ids), "wb")
+        connections=nest.GetStatus(nest.GetConnections(self.nodes_i))
+        f=open('conn_bulki_{}.bin'.format(ids), "wb")
         pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
         # # Out connections
-        connections = nest.GetStatus(nest.GetConnections(self.nodes_out_e[0]))
-        f = open('conn_oute_0_{}.bin'.format(ids), "wb")
+        connections=nest.GetStatus(nest.GetConnections(self.nodes_out_e[0]))
+        f=open('conn_oute_0_{}.bin'.format(ids), "wb")
         pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
         f.close()
-        connections = nest.GetStatus(nest.GetConnections(self.nodes_out_i[0]))
-        f = open('conn_outi_0_{}.bin'.format(ids), "wb")
+        connections=nest.GetStatus(nest.GetConnections(self.nodes_out_i[0]))
+        f=open('conn_outi_0_{}.bin'.format(ids), "wb")
         pickle.dump(connections, f, pickle.HIGHEST_PROTOCOL)
         f.close()
 
 
 def remove_files(extensions):
-    files = []
+    files=[]
     for ext in extensions:
         files.extend(glob.glob(ext))
         print(files)
