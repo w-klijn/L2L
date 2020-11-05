@@ -50,7 +50,7 @@ class JUBERunner():
 
         self.executor = args['exec']
         self.filename = ""
-        self.path = args['paths_obj'].simulation_path
+        self.path = args['paths'].simulation_path
         # Create directories for workspace
         subdirs = ['jube_xml', 'run_files', 'ready_files', 'trajectories', 'results', 'work']
         self.work_paths = {sdir: os.path.join(self.path, sdir) for sdir in subdirs}
@@ -202,6 +202,7 @@ class JUBERunner():
         self.done = False
         ready_files = []
         path_ready = os.path.join(self.work_paths["ready_files"], "ready_%d_"%generation)
+
         self.prepare_run_file(path_ready)
 
         # Dump all trajectories for each optimizee run in the generation
